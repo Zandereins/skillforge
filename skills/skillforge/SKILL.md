@@ -78,6 +78,20 @@ Iterations: 30
 
 The 6 default dimensions are available as presets, but **not required**.
 
+**Regression guards:** Set floor constraints to prevent one dimension from
+regressing while improving another:
+
+```
+/skillforge
+Target: .claude/skills/deploy/SKILL.md
+Goal: Maximize trigger accuracy
+Metric: Trigger pass rate
+Verify: python3 scripts/score-skill.py SKILL.md --json
+Constraint: efficiency >= 80, composability >= 90
+```
+
+Use constraints when optimizing one dimension risks degrading others.
+
 ## Quality Dimensions (Defaults, Customizable)
 
 | Dimension | Metric | How | Pass Rate |
