@@ -1,0 +1,22 @@
+# SkillForge working files (generated during runs, not committed)
+skillforge-results.tsv
+skillforge-eval-results.json
+skillforge-report.md
+skillforge-workspace/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

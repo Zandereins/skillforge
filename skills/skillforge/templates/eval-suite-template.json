@@ -1,0 +1,86 @@
+{
+  "skill_name": "example-skill",
+  "version": "1.0.0",
+  "created_by": "skillforge",
+  "triggers": [
+    {
+      "id": "pos-1",
+      "prompt": "Help me create a deployment script",
+      "should_trigger": true,
+      "category": "positive",
+      "notes": "Direct match"
+    },
+    {
+      "id": "pos-2",
+      "prompt": "I need to push this to production",
+      "should_trigger": true,
+      "category": "positive",
+      "notes": "Synonym for deployment"
+    },
+    {
+      "id": "pos-3",
+      "prompt": "Set up CI/CD for my project",
+      "should_trigger": true,
+      "category": "positive",
+      "notes": "Related task within scope"
+    },
+    {
+      "id": "neg-1",
+      "prompt": "What is the capital of France?",
+      "should_trigger": false,
+      "category": "negative",
+      "notes": "Completely unrelated"
+    },
+    {
+      "id": "neg-2",
+      "prompt": "Help me write a unit test",
+      "should_trigger": false,
+      "category": "negative",
+      "notes": "Adjacent but out of scope"
+    },
+    {
+      "id": "edge-1",
+      "prompt": "Deploy my database changes",
+      "should_trigger": true,
+      "category": "edge",
+      "notes": "Ambiguous - could be migration or deployment"
+    }
+  ],
+  "test_cases": [
+    {
+      "id": "tc-1",
+      "prompt": "Create a GitHub Actions workflow to deploy my Next.js app to Vercel",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "on:", "description": "Output contains workflow trigger"},
+        {"type": "contains", "value": "jobs:", "description": "Output contains job definitions"},
+        {"type": "format", "value": "yaml", "description": "Output is valid YAML"},
+        {"type": "excludes", "value": "TODO", "description": "No placeholder text"}
+      ]
+    },
+    {
+      "id": "tc-2",
+      "prompt": "Deploy this to staging",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "staging", "description": "Output targets staging environment"}
+      ]
+    }
+  ],
+  "edge_cases": [
+    {
+      "id": "ec-1",
+      "prompt": "Deploy",
+      "category": "minimal_input",
+      "expected_behavior": "Ask for clarification about what to deploy and where",
+      "assertions": [{"type": "pattern", "value": "\\?", "description": "Response asks a clarifying question"}]
+    },
+    {
+      "id": "ec-2",
+      "prompt": "Deploy my app to a platform that doesnt exist yet",
+      "category": "impossible_request",
+      "expected_behavior": "Graceful handling - suggest alternatives",
+      "assertions": [{"type": "excludes", "value": "error", "description": "No crash or error output"}]
+    }
+  ]
+}

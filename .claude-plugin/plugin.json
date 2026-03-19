@@ -1,0 +1,15 @@
+{
+  "name": "skillforge",
+  "version": "1.0.0",
+  "description": "Autonomous skill improvement engine using the autoresearch loop pattern. Iteratively improves any Claude Code skill with measurable metrics.",
+  "author": "Zandereins",
+  "license": "MIT",
+  "homepage": "https://github.com/Zandereins/skillforge",
+  "skills": ["skills/skillforge"],
+  "commands": ["commands/skillforge"],
+  "tags": ["autoresearch", "skill-improvement", "autonomous", "evaluation", "meta-skill"],
+  "compatibility": {
+    "claude_code": ">=1.0.0",
+    "platforms": ["linux", "macos", "windows"]
+  }
+}

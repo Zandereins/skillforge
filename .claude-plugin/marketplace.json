@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "name": "SkillForge",
+  "slug": "skillforge",
+  "tagline": "Autonomous skill improvement engine — autoresearch for skills",
+  "description": "Takes any Claude Code skill as input and iteratively improves it with measurable metrics: trigger accuracy, output quality, edge-case coverage, token efficiency. Based on Karpathy's autoresearch loop pattern.",
+  "categories": ["productivity", "developer-tools", "meta"],
+  "author": {
+    "name": "Zandereins",
+    "github": "https://github.com/Zandereins"
+  },
+  "repository": "https://github.com/Zandereins/skillforge",
+  "license": "MIT",
+  "keywords": [
+    "autoresearch", "skill-improvement", "autonomous-agent",
+    "claude-code", "evaluation", "meta-skill", "karpathy-loop"
+  ]
+}
