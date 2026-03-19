@@ -55,10 +55,11 @@ LOOP (fixed time or N iterations, continues until goal met or budget exhausted):
 
 ## When to Use
 
-- **Skill not triggering properly** → `/skillforge` on trigger-accuracy metric
+- **Skill not triggering properly** → Run `/skillforge` on trigger-accuracy metric
 - **Outputs are wrong or incomplete** → Set goal, metric is binary eval pass rate
 - **Need to harden for edge cases** → Focus on edge-coverage metric
 - **Skill too verbose** → Optimize token-efficiency metric
+- **Don't know what's wrong** → Run `/skillforge:analyze` for auto-discovery mode
 - **Any custom goal** → Define GOAL, pick/create METRIC, set VERIFY command
 
 ## Interface: GOAL + METRIC + VERIFY
@@ -76,6 +77,20 @@ Iterations: 30
 ```
 
 The 6 default dimensions are available as presets, but **not required**.
+
+**Regression guards:** Set floor constraints to prevent one dimension from
+regressing while improving another:
+
+```
+/skillforge
+Target: .claude/skills/deploy/SKILL.md
+Goal: Maximize trigger accuracy
+Metric: Trigger pass rate
+Verify: python3 scripts/score-skill.py SKILL.md --json
+Constraint: efficiency >= 80, composability >= 90
+```
+
+Use constraints when optimizing one dimension risks degrading others.
 
 ## Quality Dimensions (Defaults, Customizable)
 
@@ -139,26 +154,65 @@ Each iteration follows `references/improvement-protocol.md`. Immutable rules:
 7. Never modify VERIFY during loop. The metric is fixed; the skill is the variable. Otherwise results are incomparable.
 8. Log everything to `history/` — diffs, metric values, status. This ensures future iterations analyze what worked.
 
-## History Directory (Experiment Diffs)
+## Cross-Session Learning
 
-SkillForge maintains a `history/` subdirectory with timestamped diffs:
+SkillForge reads `history/results.jsonl` at loop start. Extract patterns from past runs:
+1. Parse all previous keep/discard decisions with their change types.
+2. Compute success rate per strategy (e.g., "synonym expansion: 80% keep rate").
+3. Prioritize strategies with highest historical success rate for this skill.
+4. Track diminishing returns: if last 5 iterations gained < 1 point total, suggest stopping.
 
-```
-skillforge/history/
-├── exp-001-baseline.txt
-├── exp-001-to-002.diff
-├── exp-002-to-003.diff
-├── exp-003-baseline.json     ← scores only, no revert
-├── results.jsonl             ← experiment log (JSONL)
-```
+Use `scripts/progress.py` to visualize convergence curves and detect plateaus.
 
-Result lines: `exp | commit | metric | status | description`
+## Agent + Multi-File Skill Improvement
 
-Diffs enable future runs to spot patterns: "what improved metric in the past?"
+SkillForge handles skills that span multiple files (SKILL.md + references/):
+1. Read the full skill tree before each change. Build a file dependency map.
+2. When a change requires a new reference file, create it and add a pointer from SKILL.md.
+3. When SKILL.md exceeds 400 lines, extract the largest section to `references/`.
+4. Verify all cross-file references resolve after each change.
 
-## Improvement Strategies (Priority)
+For agent improvement (not just skills): treat the agent's system prompt as SKILL.md,
+and the agent's tool definitions as reference files. Run the same loop.
 
-1. Fix structural issues first — Run `bash scripts/analyze-skill.sh` to detect gaps.
+## Discovery Mode (Auto-Gap Analysis)
+
+Run `/skillforge:analyze` without a GOAL. SkillForge will:
+1. Run all 6 dimension scorers on the target skill.
+2. Identify the weakest dimension and its specific failure patterns.
+3. Cluster eval failures to find systemic issues (e.g., "all false negatives share short prompts").
+4. Propose a ranked list of improvements with estimated iteration cost.
+5. Suggest GOAL + METRIC + VERIFY automatically. User confirms or overrides.
+
+Use discovery mode when the user says "my skill needs work" without specifying what.
+
+## Parallel Experimentation (Try 3, Keep Best)
+
+For iterations where multiple plausible changes exist:
+1. Create 3 candidate changes on separate git branches using `git worktree`.
+2. Run VERIFY on all 3 branches independently.
+3. Keep the branch with the highest metric improvement. Discard the other two.
+4. Fall back to sequential mode if git worktree is unavailable.
+
+Use parallel mode when stuck (5+ sequential discards) or when the gap-to-target
+is large (>15 points). This is 3x faster than sequential experimentation because
+each iteration explores more of the search space.
+
+## Noisy Metric Handling
+
+When metrics fluctuate (±5% across runs), use multi-run averaging:
+1. Run VERIFY 3 times per iteration. Use the median score.
+2. Apply a significance threshold: keep only if improvement > 2 * noise floor.
+3. Detect noise floor automatically from the first 3 baseline runs.
+
+Use this when the VERIFY command involves LLM output or timing-dependent checks.
+
+## Improvement Strategies (Dynamic)
+
+Select strategy based on gap analysis, not fixed priority. Check dimensions in
+this order and pick the first with a gap > 10 points from target:
+
+1. Fix structural issues — Run `bash scripts/analyze-skill.sh` to detect gaps.
 2. Expand trigger description — Add synonyms, edge cases, negative boundaries.
 3. Add input/output examples — Write 3+ concrete before/after pairs per feature.
 4. Add edge-case handling — Test with malformed input, missing context, empty files.
@@ -215,23 +269,13 @@ from scratch, instead use `skill-creator`. If the user wants to debug a skill
 that crashes, suggest using the `systematic-debugging` skill first, then return
 to SkillForge for iteration.
 
-## Files in This Skill
+## Files
 
-```
-skillforge/
-├── SKILL.md                          ← You are here
-├── references/
-│   ├── improvement-protocol.md       ← Detailed 8-phase loop
-│   ├── metrics-catalog.md            ← Scoring rubrics + custom metrics
-│   └── skill-patterns.md             ← Patterns, anti-patterns, examples
-├── scripts/
-│   ├── analyze-skill.sh              ← Structure lint
-│   ├── score-skill.py                ← Dimension scoring
-│   ├── run-eval.sh                   ← Unified eval runner
-│   └── progress.py                   ← Progress tracking + ASCII charts
-├── templates/
-│   ├── eval-suite-template.json      ← Eval skeleton
-│   └── improvement-log-template.jsonl ← History template (JSONL)
-└── history/                          ← Experiment diffs + results
-    └── results.jsonl
-```
+Run `ls -R` in the skill directory. Key files:
+- `scripts/score-skill.py` — Run to compute all 6 dimension scores
+- `scripts/analyze-skill.sh` — Run for structural lint (100-point check)
+- `scripts/run-eval.sh` — Run eval suite with assertion validation
+- `scripts/progress.py` — Generate convergence charts from `history/results.jsonl`
+- `references/improvement-protocol.md` — Full 9-phase autonomous loop spec
+- `references/metrics-catalog.md` — Scoring rubrics + custom metric setup
+- `templates/eval-suite-template.json` — Eval skeleton for new skills

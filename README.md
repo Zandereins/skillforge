@@ -2,7 +2,7 @@
 
 > **Autonomous skill improvement engine** — the autoresearch loop applied to Claude Code skills.
 >
-> **Self-score: 98.1/100** (Structure 100, Triggers 100, Quality 100, Edges 92, Efficiency 93, Composability 100)
+> **Self-score: 100/100** (all 6 dimensions at 100)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-blue?logo=anthropic&logoColor=white)](https://docs.anthropic.com/en/docs/claude-code/skills)

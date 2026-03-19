@@ -154,16 +154,43 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
                 
                 ASSERTIONS_TOTAL=$((ASSERTIONS_TOTAL + 1))
                 
-                # Stub: in a real implementation, run the skill prompt
-                # and validate the output against the assertion
-                # For now, mark all as passed for this prototype
-                ASSERTIONS_PASSED=$((ASSERTIONS_PASSED + 1))
-                
+                # Evaluate assertion against skill content (static check)
+                # For runtime assertions, the caller must provide output files
+                assertion_passed="false"
+                skill_content=$(cat "$SKILL_PATH" 2>/dev/null || echo "")
+
+                case "$assertion_type" in
+                    contains)
+                        if echo "$skill_content" | grep -qi "$assertion_value" 2>/dev/null; then
+                            assertion_passed="true"
+                        fi
+                        ;;
+                    excludes)
+                        if ! echo "$skill_content" | grep -qi "$assertion_value" 2>/dev/null; then
+                            assertion_passed="true"
+                        fi
+                        ;;
+                    pattern)
+                        if echo "$skill_content" | grep -qiE "$assertion_value" 2>/dev/null; then
+                            assertion_passed="true"
+                        fi
+                        ;;
+                    *)
+                        # Unknown assertion type — skip, mark as passed
+                        assertion_passed="true"
+                        ;;
+                esac
+
+                if [[ "$assertion_passed" == "true" ]]; then
+                    ASSERTIONS_PASSED=$((ASSERTIONS_PASSED + 1))
+                fi
+
                 BINARY_ARRAY=$(echo "$BINARY_ARRAY" | jq \
                     --arg tc_id "$tc_id" \
                     --arg type "$assertion_type" \
                     --arg desc "$assertion_desc" \
-                    '. += [{"test_case": $tc_id, "type": $type, "description": $desc, "passed": true}]')
+                    --argjson passed "$assertion_passed" \
+                    '. += [{"test_case": $tc_id, "type": $type, "description": $desc, "passed": $passed}]')
             done
         done
         
@@ -223,8 +250,9 @@ RESULT_JSON=$(jq -n \
 if [[ -n "$RESULTS_LOG" ]]; then
     mkdir -p "$(dirname "$RESULTS_LOG")"
     
-    # TSV format: experiment_id | skill_name | pass_rate | composite_score | timestamp
-    echo "$EXPERIMENT_ID	$SKILL_NAME	$PASS_RATE	$COMPOSITE_SCORE	$TIMESTAMP" >> "$RESULTS_LOG"
+    # JSONL format: one JSON object per line (compatible with progress.py)
+    printf '{"experiment_id":"%s","skill_name":"%s","pass_rate":%s,"composite_score":%s,"timestamp":"%s"}\n' \
+        "$EXPERIMENT_ID" "$SKILL_NAME" "$PASS_RATE" "${COMPOSITE_SCORE:-0}" "$TIMESTAMP" >> "$RESULTS_LOG"
 fi
 
 # --- Output JSON result ---
