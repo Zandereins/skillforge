@@ -55,10 +55,11 @@ LOOP (fixed time or N iterations, continues until goal met or budget exhausted):
 
 ## When to Use
 
-- **Skill not triggering properly** → `/skillforge` on trigger-accuracy metric
+- **Skill not triggering properly** → Run `/skillforge` on trigger-accuracy metric
 - **Outputs are wrong or incomplete** → Set goal, metric is binary eval pass rate
 - **Need to harden for edge cases** → Focus on edge-coverage metric
 - **Skill too verbose** → Optimize token-efficiency metric
+- **Don't know what's wrong** → Run `/skillforge:analyze` for auto-discovery mode
 - **Any custom goal** → Define GOAL, pick/create METRIC, set VERIFY command
 
 ## Interface: GOAL + METRIC + VERIFY
@@ -156,9 +157,44 @@ Result lines: `exp | commit | metric | status | description`
 
 Diffs enable future runs to spot patterns: "what improved metric in the past?"
 
-## Improvement Strategies (Priority)
+## Discovery Mode (Auto-Gap Analysis)
 
-1. Fix structural issues first — Run `bash scripts/analyze-skill.sh` to detect gaps.
+Run `/skillforge:analyze` without a GOAL. SkillForge will:
+1. Run all 6 dimension scorers on the target skill.
+2. Identify the weakest dimension and its specific failure patterns.
+3. Cluster eval failures to find systemic issues (e.g., "all false negatives share short prompts").
+4. Propose a ranked list of improvements with estimated iteration cost.
+5. Suggest GOAL + METRIC + VERIFY automatically. User confirms or overrides.
+
+Use discovery mode when the user says "my skill needs work" without specifying what.
+
+## Parallel Experimentation (Try 3, Keep Best)
+
+For iterations where multiple plausible changes exist:
+1. Create 3 candidate changes on separate git branches using `git worktree`.
+2. Run VERIFY on all 3 branches independently.
+3. Keep the branch with the highest metric improvement. Discard the other two.
+4. Fall back to sequential mode if git worktree is unavailable.
+
+Use parallel mode when stuck (5+ sequential discards) or when the gap-to-target
+is large (>15 points). This is 3x faster than sequential experimentation because
+each iteration explores more of the search space.
+
+## Noisy Metric Handling
+
+When metrics fluctuate (±5% across runs), use multi-run averaging:
+1. Run VERIFY 3 times per iteration. Use the median score.
+2. Apply a significance threshold: keep only if improvement > 2 * noise floor.
+3. Detect noise floor automatically from the first 3 baseline runs.
+
+Use this when the VERIFY command involves LLM output or timing-dependent checks.
+
+## Improvement Strategies (Dynamic)
+
+Select strategy based on gap analysis, not fixed priority. Check dimensions in
+this order and pick the first with a gap > 10 points from target:
+
+1. Fix structural issues — Run `bash scripts/analyze-skill.sh` to detect gaps.
 2. Expand trigger description — Add synonyms, edge cases, negative boundaries.
 3. Add input/output examples — Write 3+ concrete before/after pairs per feature.
 4. Add edge-case handling — Test with malformed input, missing context, empty files.
