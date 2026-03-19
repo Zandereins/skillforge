@@ -140,22 +140,26 @@ Each iteration follows `references/improvement-protocol.md`. Immutable rules:
 7. Never modify VERIFY during loop. The metric is fixed; the skill is the variable. Otherwise results are incomparable.
 8. Log everything to `history/` — diffs, metric values, status. This ensures future iterations analyze what worked.
 
-## History Directory (Experiment Diffs)
+## Cross-Session Learning
 
-SkillForge maintains a `history/` subdirectory with timestamped diffs:
+SkillForge reads `history/results.jsonl` at loop start. Extract patterns from past runs:
+1. Parse all previous keep/discard decisions with their change types.
+2. Compute success rate per strategy (e.g., "synonym expansion: 80% keep rate").
+3. Prioritize strategies with highest historical success rate for this skill.
+4. Track diminishing returns: if last 5 iterations gained < 1 point total, suggest stopping.
 
-```
-skillforge/history/
-├── exp-001-baseline.txt
-├── exp-001-to-002.diff
-├── exp-002-to-003.diff
-├── exp-003-baseline.json     ← scores only, no revert
-├── results.jsonl             ← experiment log (JSONL)
-```
+Use `scripts/progress.py` to visualize convergence curves and detect plateaus.
 
-Result lines: `exp | commit | metric | status | description`
+## Agent + Multi-File Skill Improvement
 
-Diffs enable future runs to spot patterns: "what improved metric in the past?"
+SkillForge handles skills that span multiple files (SKILL.md + references/):
+1. Read the full skill tree before each change. Build a file dependency map.
+2. When a change requires a new reference file, create it and add a pointer from SKILL.md.
+3. When SKILL.md exceeds 400 lines, extract the largest section to `references/`.
+4. Verify all cross-file references resolve after each change.
+
+For agent improvement (not just skills): treat the agent's system prompt as SKILL.md,
+and the agent's tool definitions as reference files. Run the same loop.
 
 ## Discovery Mode (Auto-Gap Analysis)
 
@@ -251,23 +255,13 @@ from scratch, instead use `skill-creator`. If the user wants to debug a skill
 that crashes, suggest using the `systematic-debugging` skill first, then return
 to SkillForge for iteration.
 
-## Files in This Skill
+## Files
 
-```
-skillforge/
-├── SKILL.md                          ← You are here
-├── references/
-│   ├── improvement-protocol.md       ← Detailed 8-phase loop
-│   ├── metrics-catalog.md            ← Scoring rubrics + custom metrics
-│   └── skill-patterns.md             ← Patterns, anti-patterns, examples
-├── scripts/
-│   ├── analyze-skill.sh              ← Structure lint
-│   ├── score-skill.py                ← Dimension scoring
-│   ├── run-eval.sh                   ← Unified eval runner
-│   └── progress.py                   ← Progress tracking + ASCII charts
-├── templates/
-│   ├── eval-suite-template.json      ← Eval skeleton
-│   └── improvement-log-template.jsonl ← History template (JSONL)
-└── history/                          ← Experiment diffs + results
-    └── results.jsonl
-```
+Run `ls -R` in the skill directory. Key files:
+- `scripts/score-skill.py` — Run to compute all 6 dimension scores
+- `scripts/analyze-skill.sh` — Run for structural lint (100-point check)
+- `scripts/run-eval.sh` — Run eval suite with assertion validation
+- `scripts/progress.py` — Generate convergence charts from `history/results.jsonl`
+- `references/improvement-protocol.md` — Full 9-phase autonomous loop spec
+- `references/metrics-catalog.md` — Scoring rubrics + custom metric setup
+- `templates/eval-suite-template.json` — Eval skeleton for new skills
