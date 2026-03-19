@@ -1,6 +1,6 @@
 {
   "name": "skillforge",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Autonomous skill improvement engine using the autoresearch loop pattern. Iteratively improves any Claude Code skill with measurable metrics.",
   "author": "Zandereins",
   "license": "MIT",

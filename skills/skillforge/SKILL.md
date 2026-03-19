@@ -242,23 +242,19 @@ Exp 4: Add edge case for partial audit → 75% → Keep
 
 Check `history/results.jsonl` between sessions to extract which strategy types succeed.
 
-## Skill-Creator Handoff
+## Skill Genealogy + Handoff
 
-SkillForge and `skill-creator` are complementary:
+Track skill lineage across tools and sessions:
+1. `/skill-creator` → v1 draft with initial tests and human review.
+2. `/skillforge` → autonomous grinding, 30+ iterations, production quality.
+3. `/skillforge:report` → review changes, approve, merge.
+4. If new capabilities needed → back to `/skill-creator`.
+5. Each session adds a generation entry to `history/results.jsonl`.
+6. Roll back to any ancestor version: `git log --oneline history/` shows the full lineage.
 
-- **skill-creator** → v1 draft, initial tests, human review
-- **SkillForge** → autonomous grinding, 30+ iterations, production quality
-
-**Workflow:**
-1. `/skill-creator` → draft, manual iterations, user confirms "ready to grind"
-2. `/skillforge` → 30+ autonomous iterations, mechanical metrics, history
-3. `/skillforge:report` → review changes, approve, merge
-4. If new capabilities needed → back to `/skill-creator`
-
-SkillForge never creates skills from scratch. If the user wants a new skill
-from scratch, instead use `skill-creator`. If the user wants to debug a skill
-that crashes, suggest using the `systematic-debugging` skill first, then return
-to SkillForge for iteration.
+SkillForge never creates skills from scratch. If the user wants a new skill,
+instead use `skill-creator`. If the skill crashes, suggest using
+`systematic-debugging` first, then return to SkillForge for iteration.
 
 ## Files
 
