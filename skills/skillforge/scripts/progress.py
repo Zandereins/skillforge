@@ -631,6 +631,53 @@ class ProgressAnalyzer:
         return result
 
 
+def emit_strategy_meta(self, skill_name: str = "unknown", domain: str = "unknown",
+                           experiments: Optional[List[Dict[str, Any]]] = None) -> int:
+        """Emit strategy data to ~/.skillforge/meta/strategy-log.jsonl.
+
+        Returns number of entries emitted.
+        """
+        meta_dir = Path.home() / ".skillforge" / "meta"
+        meta_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = meta_dir / "strategy-log.jsonl"
+
+        exps = experiments if experiments is not None else self.experiments
+        count = 0
+
+        with open(meta_path, "a") as f:
+            for exp in exps:
+                if exp.get("status") in ("baseline",):
+                    continue
+
+                strategy = exp.get("strategy_type")
+                if not strategy:
+                    strategy = self._infer_strategy(exp.get("description", ""))
+                if not strategy:
+                    strategy = "unknown"
+
+                entry = {
+                    "skill": skill_name,
+                    "domain": domain,
+                    "strategy_type": strategy,
+                    "status": exp.get("status", "unknown"),
+                    "delta": exp.get("delta", 0),
+                    "dimension_deltas": {},
+                    "context": exp.get("description", ""),
+                    "timestamp": exp.get("timestamp", ""),
+                }
+
+                # Compute dimension deltas if scores available
+                scores = exp.get("scores", {})
+                if scores:
+                    entry["dimension_deltas"] = {k: v for k, v in scores.items()
+                                                   if isinstance(v, (int, float))}
+
+                f.write(json.dumps(entry) + "\n")
+                count += 1
+
+        return count
+
+
 def main() -> None:
     """Main entry point."""
     import argparse
@@ -655,6 +702,14 @@ def main() -> None:
         "--strategies", action="store_true",
         help="Include strategy meta-learning analysis"
     )
+    parser.add_argument(
+        "--emit-meta", action="store_true",
+        help="Emit strategy data to ~/.skillforge/meta/strategy-log.jsonl"
+    )
+    parser.add_argument(
+        "--skill-name", default="unknown",
+        help="Skill name for meta-learning emit (used with --emit-meta)"
+    )
 
     args = parser.parse_args()
 
@@ -663,6 +718,12 @@ def main() -> None:
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Emit meta-learning data if requested
+    if args.emit_meta:
+        count = analyzer.emit_strategy_meta(skill_name=args.skill_name)
+        print(f"Emitted {count} strategy entries to ~/.skillforge/meta/strategy-log.jsonl",
+              file=sys.stderr)
 
     summary = analyzer.generate_summary(goal=args.goal, since=args.since)
 

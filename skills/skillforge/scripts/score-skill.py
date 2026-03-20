@@ -50,27 +50,10 @@ STOPWORDS = {
 
 
 def score_structure(skill_path: str) -> dict:
-    """Run the bash analyzer and return structure score."""
-    script_dir = Path(__file__).parent
-    analyze_script = script_dir / "analyze-skill.sh"
+    """Score structural quality of a skill file.
 
-    if analyze_script.exists():
-        try:
-            result = subprocess.run(
-                ["bash", str(analyze_script), skill_path],
-                capture_output=True, text=True, timeout=30
-            )
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
-                return {
-                    "score": data.get("structure_score", 0),
-                    "issues": data.get("issues", []),
-                    "details": data
-                }
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-            pass
-
-    # Fallback: basic inline checks
+    Uses inline Python analysis directly — no external bash dependency.
+    """
     return _score_structure_inline(skill_path)
 
 
@@ -153,6 +136,29 @@ def _score_structure_inline(skill_path: str) -> dict:
     else:
         score += 5
         issues.append(f"missing_refs: {missing}")
+
+    # No dead content (TODO/FIXME/placeholder, empty sections)
+    todo_count = len(re.findall(r"(?i)(TODO|FIXME|HACK|XXX|placeholder)", content))
+    # Check for headers followed by only blank lines or next header
+    empty_sections = 0
+    for i, line in enumerate(lines):
+        if re.match(r"^##\s", line):
+            # Look at next 5 non-empty lines
+            next_content = 0
+            for j in range(i + 1, min(i + 6, len(lines))):
+                if lines[j].strip() and not lines[j].startswith("#"):
+                    next_content += 1
+            if next_content == 0:
+                empty_sections += 1
+    if todo_count == 0 and empty_sections == 0:
+        score += 10
+    elif todo_count == 0:
+        score += 7
+        issues.append(f"has_empty_sections:{empty_sections}")
+    else:
+        issues.append(f"has_todo_or_placeholder_text:{todo_count}")
+        if empty_sections > 0:
+            issues.append(f"has_empty_sections:{empty_sections}")
 
     return {"score": max(0, min(100, score)), "issues": issues, "details": {"line_count": len(lines)}}
 
@@ -895,11 +901,17 @@ def score_edges(skill_path: str, eval_suite: Optional[dict]) -> dict:
     }
 
 
-def compute_composite(scores: dict) -> dict:
+def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> dict:
     """Compute weighted composite score with confidence indicator.
 
     Returns both the score and metadata about how many dimensions
     were actually measured, so users know how trustworthy the number is.
+
+    Args:
+        scores: Per-dimension score dicts from the individual scorers.
+        custom_weights: Optional dict of dimension_name -> float weight.
+            Values are normalized to sum to 1.0. Example:
+            {"structure": 0.3, "triggers": 0.4, "efficiency": 0.3}
     """
     weights = {
         "structure": 0.15,
@@ -909,6 +921,13 @@ def compute_composite(scores: dict) -> dict:
         "efficiency": 0.10,
         "composability": 0.10,
     }
+
+    # Apply custom weights if provided
+    if custom_weights:
+        # Normalize custom weights to sum to 1.0
+        total_w = sum(custom_weights.values())
+        if total_w > 0:
+            weights = {k: v / total_w for k, v in custom_weights.items()}
 
     # If clarity is present, add it with weight 0.05 redistributed from others
     if "clarity" in scores:
@@ -952,6 +971,27 @@ def compute_composite(scores: dict) -> dict:
             f"Unmeasured: {', '.join(unmeasured)}"
         )
 
+    # Confidence notes: explain what each dimension can and cannot tell you
+    confidence_notes = {
+        "structure": "Measures file organization (frontmatter, headers, length, references). "
+                     "Cannot assess whether instructions are correct or effective.",
+        "triggers": "Measures keyword overlap between description and eval prompts using TF-IDF heuristic. "
+                     "Cannot predict actual Claude triggering behavior — that requires runtime evaluation.",
+        "quality": "Measures eval suite coverage (assertion types, feature breadth). "
+                    "Cannot assess whether following the skill produces correct output.",
+        "edges": "Measures edge case definitions in the eval suite. "
+                  "Cannot verify the skill handles edge cases correctly at runtime.",
+        "efficiency": "Measures information density (signal-to-noise ratio in text). "
+                      "Cannot assess whether the content is actually useful to Claude.",
+        "composability": "Measures scope boundaries and handoff declarations. "
+                         "Cannot verify the skill works correctly alongside other skills.",
+    }
+    if "clarity" in scores:
+        confidence_notes["clarity"] = (
+            "Measures contradiction, vague reference, and ambiguity patterns. "
+            "Cannot assess whether instructions are clear to Claude in practice."
+        )
+
     return {
         "score": composite,
         "measured_dimensions": measured_count,
@@ -959,6 +999,7 @@ def compute_composite(scores: dict) -> dict:
         "weight_coverage": confidence,
         "unmeasured": unmeasured,
         "warnings": warnings,
+        "confidence_notes": {k: v for k, v in confidence_notes.items() if k in measured},
     }
 
 
@@ -1204,6 +1245,10 @@ def main():
     parser.add_argument("--diff", action="store_true", help="Include diff analysis")
     parser.add_argument("--diff-ref", default="HEAD~1", help="Git ref to diff against (default: HEAD~1)")
     parser.add_argument("--clarity", action="store_true", help="Include clarity dimension (zero weight by default)")
+    parser.add_argument("--weights", default=None,
+                        help="Custom dimension weights as key=value pairs, e.g. "
+                             "'structure=0.3,triggers=0.4,efficiency=0.3'. "
+                             "Values are normalized to sum to 1.0.")
     args = parser.parse_args()
 
     eval_suite = None
@@ -1229,7 +1274,17 @@ def main():
     if args.clarity:
         scores["clarity"] = score_clarity(args.skill_path)
 
-    composite_result = compute_composite(scores)
+    # Parse custom weights if provided
+    custom_weights = None
+    if args.weights:
+        custom_weights = {}
+        for pair in args.weights.split(","):
+            pair = pair.strip()
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                custom_weights[k.strip()] = float(v.strip())
+
+    composite_result = compute_composite(scores, custom_weights)
 
     result = {
         "skill_path": args.skill_path,
@@ -1241,6 +1296,7 @@ def main():
             "unmeasured": composite_result["unmeasured"],
         },
         "warnings": composite_result["warnings"],
+        "confidence_notes": composite_result.get("confidence_notes", {}),
         "dimensions": {k: v["score"] for k, v in scores.items()},
         "issues": {k: v["issues"] for k, v in scores.items() if v["issues"]},
         "details": {k: v["details"] for k, v in scores.items() if v["details"]},

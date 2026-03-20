@@ -155,7 +155,7 @@ section "3. run-eval.sh — Integration"
 ##############################################################################
 
 # Test: basic run produces valid JSON
-EVAL_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" 2>/dev/null)
+EVAL_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" --no-runtime-auto 2>/dev/null)
 EVAL_EXIT=$?
 VALID_JSON=$(echo "$EVAL_RESULT" | python3 -c "import sys,json; json.load(sys.stdin); print('valid')" 2>/dev/null)
 if [[ "$VALID_JSON" == "valid" ]]; then
@@ -188,7 +188,7 @@ fi
 # Test: JSONL log format matches progress.py schema
 JSONL_LOG="$TMPDIR_BASE/test-results.jsonl"
 bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" \
-    --log "$JSONL_LOG" > /dev/null 2>/dev/null || true
+    --log "$JSONL_LOG" --no-runtime-auto > /dev/null 2>/dev/null || true
 if [[ -f "$JSONL_LOG" ]]; then
     MISSING_FIELDS=$(python3 -c "
 import sys,json
@@ -329,7 +329,7 @@ ROUNDTRIP_LOG="$TMPDIR_BASE/roundtrip.jsonl"
 echo '{"exp": 0, "timestamp": "2026-01-01T00:00:00Z", "commit": "base", "scores": {"structure": 50}, "pass_rate": "0/0", "composite": 50, "delta": 0, "status": "baseline", "description": "baseline", "duration_ms": 0}' > "$ROUNDTRIP_LOG"
 # Append from run-eval.sh
 bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" \
-    --log "$ROUNDTRIP_LOG" > /dev/null 2>/dev/null || true
+    --log "$ROUNDTRIP_LOG" --no-runtime-auto > /dev/null 2>/dev/null || true
 # Read back with progress.py
 ROUNDTRIP_RESULT=$(python3 "$SCRIPT_DIR/progress.py" "$ROUNDTRIP_LOG" --json 2>&1)
 RT_TOTAL=$(echo "$ROUNDTRIP_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['total_experiments'])" 2>/dev/null)
@@ -842,7 +842,7 @@ cat > "$REGEX_EVAL" <<'REOF'
   "edge_cases": []
 }
 REOF
-REGEX_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$REGEX_EVAL" 2>/dev/null || true)
+REGEX_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$REGEX_EVAL" --no-runtime-auto 2>/dev/null || true)
 REGEX_PASSED_CT=$(echo "$REGEX_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['passed'])" 2>/dev/null)
 REGEX_TOTAL_CT=$(echo "$REGEX_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['total'])" 2>/dev/null)
 # Bad regex should fail (grep -qiE returns non-zero), frontmatter should pass
@@ -871,7 +871,7 @@ cat > "$UNKNOWN_EVAL" <<'UEOF'
   "edge_cases": []
 }
 UEOF
-UNKNOWN_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$UNKNOWN_EVAL" 2>/dev/null || true)
+UNKNOWN_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$UNKNOWN_EVAL" --no-runtime-auto 2>/dev/null || true)
 UNKNOWN_PASSED=$(echo "$UNKNOWN_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['passed'])" 2>/dev/null)
 if [[ "$UNKNOWN_PASSED" == "1" ]]; then
     pass "Unknown assertion type → passed (skipped)"
@@ -898,7 +898,7 @@ cat > "$CI_EVAL" <<'CEOF'
   "edge_cases": []
 }
 CEOF
-CI_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$CI_EVAL" 2>/dev/null || true)
+CI_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$CI_EVAL" --no-runtime-auto 2>/dev/null || true)
 CI_PASSED=$(echo "$CI_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['passed'])" 2>/dev/null)
 if [[ "$CI_PASSED" == "1" ]]; then
     pass "Case-insensitive contains → passed"
@@ -926,7 +926,7 @@ cat > "$EXCL_EVAL" <<'EEOF'
   "edge_cases": []
 }
 EEOF
-EXCL_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$EXCL_EVAL" 2>/dev/null || true)
+EXCL_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$EXCL_EVAL" --no-runtime-auto 2>/dev/null || true)
 EXCL_PASSED=$(echo "$EXCL_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['passed'])" 2>/dev/null)
 if [[ "$EXCL_PASSED" == "1" ]]; then
     pass "Excludes: non-existent passes, existing fails (1/2)"
@@ -953,7 +953,7 @@ cat > "$VREG_EVAL" <<'VEOF'
   "edge_cases": []
 }
 VEOF
-VREG_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$VREG_EVAL" 2>/dev/null || true)
+VREG_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$VREG_EVAL" --no-runtime-auto 2>/dev/null || true)
 VREG_PASSED=$(echo "$VREG_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['passed'])" 2>/dev/null)
 if [[ "$VREG_PASSED" == "1" ]]; then
     pass "Valid regex pattern → passed"
@@ -981,7 +981,7 @@ cat > "$RESP_EVAL" <<'RESP'
   "edge_cases": []
 }
 RESP
-RESP_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$RESP_EVAL" 2>/dev/null || true)
+RESP_RESULT=$(bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$RESP_EVAL" --no-runtime-auto 2>/dev/null || true)
 RESP_TOTAL=$(echo "$RESP_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['total'])" 2>/dev/null)
 if [[ "$RESP_TOTAL" == "1" ]]; then
     pass "response_contains skipped in static (total=1)"
@@ -1136,7 +1136,7 @@ section "15. Cost Tracking (run-eval.sh)"
 # Test: JSONL entry has duration_ms > 0
 COST_LOG="$TMPDIR_BASE/cost.jsonl"
 bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" \
-    --log "$COST_LOG" > /dev/null 2>/dev/null || true
+    --log "$COST_LOG" --no-runtime-auto > /dev/null 2>/dev/null || true
 if [[ -f "$COST_LOG" ]]; then
     COST_DUR=$(python3 -c "import json; d=json.loads(open('$COST_LOG').readline()); print(d['duration_ms'])" 2>/dev/null)
     if [[ -n "$COST_DUR" ]] && [[ "$COST_DUR" -ge 0 ]]; then
@@ -1163,7 +1163,7 @@ if [[ -f "$COST_LOG" ]]; then
 
     # Test: second run computes delta and status correctly
     bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" \
-        --log "$COST_LOG" > /dev/null 2>/dev/null || true
+        --log "$COST_LOG" --no-runtime-auto > /dev/null 2>/dev/null || true
     SECOND_STATUS=$(python3 -c "
 import json
 lines = open('$COST_LOG').readlines()

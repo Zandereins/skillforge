@@ -1,23 +1,26 @@
 ---
 name: skillforge
 description: >
-  Autonomous skill improvement engine — the autoresearch loop for Claude Code
-  skills. Define a GOAL, primary METRIC, and VERIFY method; SkillForge iterates
-  autonomously with fixed time budgets, mechanical scoring, and NEVER pauses.
-  Use for improving any skill on any domain: trigger accuracy, output quality,
-  edge coverage, token efficiency, composability, or custom metrics. Works with
-  community, custom, project-local, or global skills. Trigger phrases: "make
-  this skill better", "optimize my skill", "iterate on this skill overnight",
-  "improve [metric] from X to Y", "audit skill", "review my skill", "harden
-  skill", "benchmark skill", or paste SKILL.md for auto-analysis. Also use when
-  user shares skill without explicit instructions. Do NOT use for brand-new
-  skills from scratch — use skill-creator first, then come to SkillForge.
+  Disciplined skill improvement and measurement framework — the autoresearch
+  loop for Claude Code skills. Define a GOAL, primary METRIC, and VERIFY
+  method; SkillForge iterates autonomously with fixed time budgets, mechanical
+  scoring, and NEVER pauses. Use for improving any skill on any domain: trigger
+  accuracy, output quality, edge coverage, token efficiency, composability, or
+  custom metrics. Works with community, custom, project-local, or global
+  skills. Trigger phrases: "make this skill better", "optimize my skill",
+  "iterate on this skill overnight", "improve [metric] from X to Y", "audit
+  skill", "review my skill", "harden skill", "benchmark skill", or paste
+  SKILL.md for auto-analysis. Also use when user shares skill without explicit
+  instructions. Do NOT use for brand-new skills from scratch — use
+  skill-creator first, then come to SkillForge.
 ---
 
-# SkillForge — Autonomous Skill Improvement Engine
+# SkillForge — Skill Measurement & Iteration Framework
 
-Constraint + clear metric + autonomous iteration = compounding gains. Each kept
-improvement builds on the last — gradient descent for skill quality.
+Constraint + clear metric + disciplined iteration = compounding gains. Each kept
+improvement builds on the last. The composite score measures structural quality
+(file organization, keyword coverage, eval suite breadth) — not runtime
+effectiveness. Use `--runtime` to validate actual behavior.
 
 ## Quick Start (Only 2 Inputs Required)
 
@@ -82,20 +85,21 @@ Constraint: efficiency >= 80, composability >= 90
 
 Use constraints to prevent dimension degradation during optimization.
 
-## Quality Dimensions (Defaults, Customizable)
+## Quality Dimensions (Defaults, Configurable via `--weights`)
 
-| Dimension | Metric | How | Pass Rate |
-|-----------|--------|-----|-----------|
-| **Structure** | Frontmatter lint score | `scripts/analyze-skill.sh` | ≥ 90% |
-| **Trigger accuracy** | Positive/negative trigger pass rate | Eval suite, count matches | ≥ 85% |
-| **Output quality** | Binary eval pass rate | Test cases with assertions | ≥ 90% |
-| **Edge coverage** | Edge-case test pass rate | Malformed input, corner cases | ≥ 80% |
-| **Token efficiency** | Instruction density (words per feature) | `scripts/score-skill.py` | ≤ target |
-| **Composability** | Cross-skill conflict tests | Run with other skills | 0 conflicts |
-| **Clarity** *(opt-in)* | Contradiction + ambiguity score | `score-skill.py --clarity` | ≥ 80% |
+| Dimension | Metric | How | Limitation |
+|-----------|--------|-----|------------|
+| **Structure** | Frontmatter lint score | `scripts/score-skill.py` (inline) | Measures file quality, not instruction correctness |
+| **Trigger accuracy** | Keyword overlap with eval prompts | TF-IDF heuristic | Does not predict actual Claude triggering |
+| **Output quality** | Eval suite assertion breadth | Test cases with assertions | Does not verify runtime output |
+| **Edge coverage** | Edge-case definition coverage | Edge case test suite | Does not verify handling at runtime |
+| **Token efficiency** | Instruction density (signal/noise) | `scripts/score-skill.py` | Cannot assess content usefulness |
+| **Composability** | Scope boundary declarations | Static analysis | Cannot verify multi-skill interaction |
+| **Clarity** *(opt-in)* | Contradiction + ambiguity score | `score-skill.py --clarity` | Pattern-based, not semantic |
 
-Validate scores against real behavior: use `scripts/runtime-evaluator.py` to invoke Claude
-with test prompts and check actual output against assertions.
+**Important:** These dimensions measure structural quality — how well-formed your skill file
+is. They do NOT measure runtime effectiveness. Use `scripts/runtime-evaluator.py` to invoke
+Claude with test prompts and check actual output against assertions.
 See `references/metrics-catalog.md` for detailed rubrics and custom metric setup.
 
 ## Custom Metrics
@@ -119,6 +123,9 @@ See `references/metrics-catalog.md#custom` for setup and examples.
 | `/skillforge:bench` | Single evaluation run, current score |
 | `/skillforge:eval` | Run eval suite, show results |
 | `/skillforge:report` | Generate improvement summary + diffs |
+| `/skillforge:mesh` | Scan all skills for trigger overlap, broken handoffs, scope collisions |
+| `/skillforge:triage` | Cluster logged failures, auto-generate fixes |
+| `/skillforge:log-failure` | Manually log a skill failure for later triage |
 
 ## Before the Loop (Setup Phase)
 
@@ -222,7 +229,7 @@ Rule 7 (never modify VERIFY during loop) while improving test coverage.
 Select strategy based on gap analysis, not fixed priority. Check dimensions in
 this order and pick the first with a gap > 10 points from target:
 
-1. Fix structural issues — Run `bash scripts/analyze-skill.sh` to detect gaps.
+1. Fix structural issues — Run `python3 scripts/score-skill.py SKILL.md --json` to detect gaps.
 2. Expand trigger description — Add synonyms, edge cases, negative boundaries.
 3. Add input/output examples — Write 3+ concrete before/after pairs per feature.
 4. Add edge-case handling — Test with malformed input, missing context, empty files.
@@ -258,11 +265,15 @@ Create new skills with `skill-creator`. For crashing skills, suggest using
 ## Files
 
 Run `ls -R` in the skill directory. Run `python3 scripts/score-skill.py SKILL.md --json` for current scores. Key files:
-- `scripts/score-skill.py` — Compute dimension scores (`--diff` for change analysis, `--clarity` for 7th dimension)
+- `scripts/score-skill.py` — Compute dimension scores (`--diff`, `--clarity`, `--weights`)
+- `scripts/text-gradient.py` — Invert scorer issues into prioritized fix list (`--json`, `--top N`)
+- `scripts/skill-mesh.py` — Multi-skill conflict detection (`--skill-dirs`, `--severity`)
+- `scripts/meta-report.py` — Data-informed strategy and correlation insights
 - `scripts/runtime-evaluator.py` — Invoke Claude with test prompts, check real output
-- `scripts/analyze-skill.sh` — Run for structural lint (100-point check)
-- `scripts/run-eval.sh` — Run eval suite (`--runtime` to include runtime evaluation)
-- `scripts/progress.py` — Convergence charts + strategy analysis (`--strategies`)
+- `scripts/analyze-skill.sh` — Legacy standalone structural linter (score-skill.py has this built-in)
+- `scripts/run-eval.sh` — Run eval suite (auto-enables `--runtime` if claude CLI is available)
+- `scripts/progress.py` — Convergence charts + strategy analysis (`--strategies`, `--emit-meta`)
+- `hooks/session-injector.js` — SessionStart hook: surfaces untriaged failures
 - `references/improvement-protocol.md` — Full 9-phase autonomous loop spec
 - `references/metrics-catalog.md` — Scoring rubrics + custom metric setup
 - `templates/eval-suite-template.json` — Eval skeleton for new skills

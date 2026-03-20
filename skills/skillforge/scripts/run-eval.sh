@@ -21,6 +21,7 @@ START_SECONDS=$SECONDS
 TIMEOUT=300
 RESULTS_LOG=""
 RUNTIME_EVAL=0
+RUNTIME_IF_AVAILABLE=1  # default ON: auto-enable runtime if claude CLI exists
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_MD=""
 EVAL_SUITE=""
@@ -61,6 +62,10 @@ while [[ $# -gt 0 ]]; do
             RUNTIME_EVAL=1
             shift
             ;;
+        --no-runtime-auto)
+            RUNTIME_IF_AVAILABLE=0
+            shift
+            ;;
         -*)
             echo "Error: unknown option $1" >&2
             exit 1
@@ -81,14 +86,15 @@ done
 
 if [[ -z "$SKILL_MD" ]] || [[ -z "$EVAL_SUITE" ]]; then
     cat >&2 <<'USAGE'
-Usage: run-eval.sh <SKILL.md> <eval-suite.json> [--timeout SECONDS] [--log RESULTS_LOG] [--runtime]
+Usage: run-eval.sh <SKILL.md> <eval-suite.json> [--timeout SECONDS] [--log RESULTS_LOG] [--runtime] [--no-runtime-auto]
 
 Arguments:
-  SKILL_MD           Path to the skill SKILL.md to evaluate
-  EVAL_SUITE         Path to eval-suite-*.json containing triggers and test cases
-  --timeout SECONDS  Timeout for scoring and assertions (default: 300)
-  --log LOGFILE      JSONL file to append results to (optional)
-  --runtime          Run runtime evaluator (invoke claude -p for each test case)
+  SKILL_MD              Path to the skill SKILL.md to evaluate
+  EVAL_SUITE            Path to eval-suite-*.json containing triggers and test cases
+  --timeout SECONDS     Timeout for scoring and assertions (default: 300)
+  --log LOGFILE         JSONL file to append results to (optional)
+  --runtime             Force runtime evaluator (invoke claude -p for each test case)
+  --no-runtime-auto     Disable auto-detection of claude CLI for runtime eval
 USAGE
     exit 1
 fi
@@ -234,7 +240,15 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
     rm -f "$BINARY_OUTPUT"
 fi
 
-# --- Run runtime evaluator (opt-in) ---
+# --- Auto-enable runtime eval if claude CLI is available ---
+if [[ $RUNTIME_EVAL -eq 0 ]] && [[ $RUNTIME_IF_AVAILABLE -eq 1 ]]; then
+    if command -v claude &>/dev/null; then
+        echo "  Runtime eval auto-enabled (claude CLI found). Use --no-runtime-auto to disable." >&2
+        RUNTIME_EVAL=1
+    fi
+fi
+
+# --- Run runtime evaluator ---
 RUNTIME_RESULTS="{}"
 if [[ $RUNTIME_EVAL -eq 1 ]]; then
     echo "  Running runtime evaluator..." >&2
@@ -296,6 +310,56 @@ RESULT_JSON=$(jq -n \
         "binary_results": $binary_results,
         "runtime_results": $runtime_results
     }')
+
+# --- Emit calibration data to meta-learning store ---
+META_DIR="${HOME}/.skillforge/meta"
+mkdir -p "$META_DIR"
+
+# Calibration log: static scores + runtime pass rate (when runtime was used)
+if [[ $RUNTIME_EVAL -eq 1 ]] && [[ "$RUNTIME_RESULTS" != "{}" ]]; then
+    RT_PASSED_META=$(echo "$RUNTIME_RESULTS" | jq -r '.assertions_passed // 0')
+    RT_TOTAL_META=$(echo "$RUNTIME_RESULTS" | jq -r '.assertions_total // 0')
+    RT_PASS_RATE_META=0
+    if [[ $RT_TOTAL_META -gt 0 ]]; then
+        RT_PASS_RATE_META=$((RT_PASSED_META * 100 / RT_TOTAL_META))
+    fi
+    jq -n -c \
+        --arg skill "$SKILL_NAME" \
+        --arg timestamp "$TIMESTAMP" \
+        --argjson static_scores "$DIMENSION_SCORES" \
+        --argjson runtime_pass_rate "$RT_PASS_RATE_META" \
+        --arg weights_used "${WEIGHTS_USED:-default}" \
+        '{
+            "skill": $skill,
+            "timestamp": $timestamp,
+            "static_scores": $static_scores,
+            "runtime_pass_rate": $runtime_pass_rate,
+            "weights_used": $weights_used
+        }' >> "$META_DIR/calibration-log.jsonl"
+fi
+
+# --- Log assertion failures to .skillforge/failures.jsonl ---
+FAILURES_DIR=".skillforge"
+FAILURES_FILE="$FAILURES_DIR/failures.jsonl"
+if [[ "$BINARY_RESULTS" != "[]" ]]; then
+    FAILED_ASSERTIONS=$(echo "$BINARY_RESULTS" | jq -c '[.[] | select(.passed == false)]')
+    FAILED_COUNT=$(echo "$FAILED_ASSERTIONS" | jq 'length')
+    if [[ $FAILED_COUNT -gt 0 ]]; then
+        mkdir -p "$FAILURES_DIR"
+        echo "$FAILED_ASSERTIONS" | jq -c ".[] | {
+            timestamp: \"$TIMESTAMP\",
+            skill: \"$SKILL_NAME\",
+            failure_type: \"assertion_failed\",
+            assertion_id: (.test_case + \":\" + .type + \":\" + (.description // \"\")),
+            confidence: 0.9
+        }" >> "$FAILURES_FILE"
+
+        # Rotate if > 1MB
+        if [[ -f "$FAILURES_FILE" ]] && [[ $(wc -c < "$FAILURES_FILE" | tr -d ' ') -gt 1000000 ]]; then
+            mv "$FAILURES_FILE" "${FAILURES_FILE}.archive.$(date +%s)"
+        fi
+    fi
+fi
 
 # --- Append to results log if specified ---
 # Schema aligned with progress.py expectations

@@ -1,0 +1,60 @@
+{
+  "skill_name": "bad-skill",
+  "version": "1.0.0",
+  "triggers": [
+    {"prompt": "help me improve my skill file", "should_trigger": true},
+    {"prompt": "make this skill better", "should_trigger": true},
+    {"prompt": "optimize my skill for triggers", "should_trigger": true},
+    {"prompt": "audit skill quality", "should_trigger": true},
+    {"prompt": "what is the weather today", "should_trigger": false},
+    {"prompt": "write a Python function", "should_trigger": false},
+    {"prompt": "deploy my Docker container", "should_trigger": false},
+    {"prompt": "review this REST API", "should_trigger": false}
+  ],
+  "test_cases": [
+    {
+      "id": "has-frontmatter",
+      "prompt": "Check skill structure",
+      "assertions": [
+        {"type": "contains", "value": "---", "description": "Has YAML frontmatter delimiter"},
+        {"type": "pattern", "value": "^name:\\s+\\S+", "description": "Has name field in frontmatter"}
+      ]
+    },
+    {
+      "id": "has-examples",
+      "prompt": "Check for examples",
+      "assertions": [
+        {"type": "pattern", "value": "(?i)example\\s*[0-9:#]", "description": "Has numbered examples"},
+        {"type": "contains", "value": "```", "description": "Has code blocks"}
+      ]
+    },
+    {
+      "id": "has-structure",
+      "prompt": "Check organization",
+      "assertions": [
+        {"type": "pattern", "value": "^## ", "description": "Has section headers"},
+        {"type": "contains", "value": "references/", "description": "References other files"}
+      ]
+    }
+  ],
+  "edge_cases": [
+    {
+      "id": "empty-description",
+      "category": "minimal_input",
+      "input": "A skill with no description field",
+      "expected_behavior": "Score structure dimension low",
+      "assertions": [
+        {"type": "contains", "value": "description:", "description": "Has description field"}
+      ]
+    },
+    {
+      "id": "no-negative-boundaries",
+      "category": "missing_deps",
+      "input": "A skill without 'do not use' boundaries",
+      "expected_behavior": "Composability score reduced",
+      "assertions": [
+        {"type": "pattern", "value": "(?i)(do not|don't) use", "description": "Has negative scope boundaries"}
+      ]
+    }
+  ]
+}

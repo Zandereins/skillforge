@@ -141,11 +141,14 @@ Choose ONE specific, atomic change.
 - "Make it better" — not specific
 - "Add lots of examples" — unbounded
 
-**Ideation strategy:**
-- Look at recent discards: what assumptions did they violate?
-- Check git diff on recent keeps: what patterns worked?
-- If custom metric: find the highest-impact code blocks from Phase 1 analysis
-- For default metrics: use the decision framework from Phase 1
+**Ideation strategy (text-gradient-first):**
+- Run `python3 scripts/text-gradient.py SKILL.md --json --top 5` to get ranked improvements
+- Pick the highest-priority gradient that hasn't been tried in the last 3 iterations
+- If all top gradients have been tried, fall back to manual ideation:
+  - Look at recent discards: what assumptions did they violate?
+  - Check git diff on recent keeps: what patterns worked?
+  - If custom metric: find the highest-impact code blocks from Phase 1 analysis
+  - For default metrics: use the decision framework from Phase 1
 
 **Output:**
 ```
