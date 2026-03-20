@@ -47,9 +47,12 @@ class ProgressAnalyzer:
                 if line:
                     try:
                         self.experiments.append(json.loads(line))
-                    except json.JSONDecodeError as e:
+                    except json.JSONDecodeError:
                         print(f"Warning: Invalid JSON on line: {line[:50]}...", file=sys.stderr)
                         continue
+
+        if not self.experiments:
+            raise ValueError(f"No valid experiments found in: {self.results_path}")
 
     def get_baseline(self) -> Optional[Dict[str, Any]]:
         """Get the baseline (first) experiment if available."""
@@ -647,7 +650,7 @@ def main() -> None:
 
     try:
         analyzer = ProgressAnalyzer(args.results_file)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 

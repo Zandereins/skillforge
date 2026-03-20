@@ -397,7 +397,11 @@ def score_efficiency(skill_path: str) -> dict:
     headers or code blocks. It should reward delivering more value in
     fewer words.
     """
-    content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
+    try:
+        content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return {"score": 0, "issues": ["file_not_found"], "details": {}}
+
     full_content = content
 
     # Strip frontmatter for body analysis
