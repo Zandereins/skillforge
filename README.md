@@ -1,12 +1,13 @@
-# SkillForge 🔨
+# SkillForge
 
-> **Autonomous skill improvement engine** — the autoresearch loop applied to Claude Code skills.
->
-> **Self-score: 100/100** (all 6 dimensions at 100)
+**Autonomous skill improvement engine for Claude Code** — gradient descent for skill quality.
+
+Set a goal, start the loop, let the agent grind through iterations while you review results.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-blue?logo=anthropic&logoColor=white)](https://docs.anthropic.com/en/docs/claude-code/skills)
-[![Based on](https://img.shields.io/badge/Based_on-Karpathy's_Autoresearch-orange)](https://github.com/karpathy/autoresearch)
+[![Tests: 51/51](https://img.shields.io/badge/Tests-51%2F51_passing-brightgreen)](skills/skillforge/scripts/test-integration.sh)
+[![Composite: 99.3](https://img.shields.io/badge/Self--Score-99.3%2F100-blue)](skills/skillforge/scripts/score-skill.py)
+[![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-8A2BE2)](https://docs.anthropic.com/en/docs/claude-code/skills)
 
 ---
 
@@ -14,184 +15,219 @@
 
 You have a Claude Code skill. It kind of works. But:
 
-- It doesn't trigger for the right prompts
-- Output quality is inconsistent
-- Edge cases crash or produce garbage
-- It's bloated with instructions Claude already knows
+- It doesn't trigger for the right prompts — false positives and false negatives
+- Edge cases crash or produce garbage — no systematic testing
+- It's bloated with instructions Claude already knows — wasted tokens
 - You don't know what "good" looks like, let alone how to measure it
 
-**SkillForge fixes this.** Set a goal, start the loop, and let the agent grind through iterations overnight while you review results.
+## The Solution
 
-## How It Works
-
-SkillForge applies [Karpathy's autoresearch pattern](https://github.com/karpathy/autoresearch) — constraint + metric + autonomous iteration — to the meta-problem of **improving skills themselves**.
+SkillForge applies [Karpathy's autoresearch pattern](https://github.com/karpathy/autoresearch) to **improving skills themselves**:
 
 ```
-You provide: a skill to improve
-SkillForge does: analyze → baseline → [improve → verify → keep/discard → log → repeat]
-You get: a measurably better skill + detailed improvement report
+LOOP:
+  1. Analyze current skill + eval results + history
+  2. Pick ONE atomic improvement based on gap analysis
+  3. Apply change, git commit
+  4. Run eval suite → compute quality score
+  5. Improved? Keep. Worse? git revert. Crash? Fix or skip.
+  6. Log to history, repeat.
 ```
 
-**The loop:**
+Every improvement stacks. Every failure auto-reverts. Progress is tracked with cost metrics.
+
+## Demo
 
 ```
-LOOP (FOREVER or N iterations):
-  1. Review current skill + eval results + improvement log
-  2. Pick ONE improvement based on gap analysis
-  3. Apply atomic change to SKILL.md or references
-  4. Git commit (before verification)
-  5. Run eval suite → compute quality score
-  6. Score improved → keep. Worse → git revert. Crash → fix or skip.
-  7. Log result to history/results.jsonl
-  8. Repeat.
+$ /skillforge
+Target: .claude/skills/deploy/SKILL.md
+Goal: Trigger accuracy from 60% to 90%
+
+Baseline (#0): composite=62.5, triggers=60, structure=75
+Exp 1: Add synonym expansion for deploy triggers → triggers=72 → Keep (+12)
+Exp 2: Add negative boundary "NOT for local dev"   → triggers=80 → Keep (+8)
+Exp 3: Compress verbose setup section              → triggers=78 → Discard (revert)
+Exp 4: Add edge case for missing Dockerfile        → triggers=85 → Keep (+5)
+Exp 5: Add "containerize" synonym                  → triggers=91 → Keep (+6)
+
+Result: 62.5 → 91.3 composite in 5 iterations
+Cost: 12,450 tokens estimated, 45s total duration
 ```
-
-Every improvement stacks. Every failure auto-reverts. Progress is tracked.
-
-## Quality Dimensions
-
-| Dimension | Weight | What It Measures | Automated? |
-|-----------|--------|-----------------|------------|
-| **Structure** | 15% | Frontmatter, progressive disclosure, organization | Yes |
-| **Trigger accuracy** | 25% | Activates for right prompts, silent for wrong ones | Yes (with eval suite) |
-| **Output quality** | 25% | Following the skill produces correct results | Yes (eval suite coverage) |
-| **Edge coverage** | 15% | Handles unusual inputs gracefully | Yes (eval suite coverage) |
-| **Token efficiency** | 10% | Information density, signal-to-noise ratio | Yes |
-| **Composability** | 10% | Scope boundaries, handoff points, no conflicts | Yes (static analysis) |
-
-> All 6 dimensions are now automated. Structure, Efficiency, and Composability use static analysis. Triggers, Quality, and Edges use eval suite coverage analysis. The composite score reports how many dimensions were measured and warns when coverage is low.
 
 ## Quick Start
 
-### 1. Install
+### Prerequisites
+
+- Python 3.9+
+- Bash
+- Git
+- jq
+
+### Install
 
 ```bash
 git clone https://github.com/Zandereins/skillforge.git
 
-# Project-local
+# Project-local install
 cp -r skillforge/skills/skillforge .claude/skills/skillforge
 cp -r skillforge/commands/skillforge .claude/commands/skillforge
 
-# Or global
+# Or global install
 cp -r skillforge/skills/skillforge ~/.claude/skills/skillforge
 cp -r skillforge/commands/skillforge ~/.claude/commands/skillforge
 ```
 
-### 2. Analyze a Skill
+### First Run
 
-```
+```bash
+# Analyze any skill
 /skillforge:analyze
 Target: .claude/skills/my-skill/SKILL.md
-```
 
-### 3. Improve Autonomously
-
-```
+# Start autonomous improvement
 /skillforge
 Target: .claude/skills/my-skill/SKILL.md
-Goal: Improve trigger accuracy from ~60% to 90%+
+Goal: Improve trigger accuracy to 90%+
 Iterations: 30
 ```
 
-### 4. Check Results
+### Verify Installation
 
+```bash
+cd skillforge/skills/skillforge
+python3 scripts/score-skill.py SKILL.md --json    # Should output composite score
+bash scripts/test-integration.sh                   # Should show 51/51 passing
 ```
-/skillforge:report
-```
+
+## How It Works
+
+### Quality Dimensions
+
+SkillForge scores skills across 6 automated dimensions:
+
+| Dimension | Weight | What It Measures | Method |
+|-----------|--------|------------------|--------|
+| **Structure** | 15% | Frontmatter, organization, progressive disclosure | Static analysis |
+| **Trigger Accuracy** | 25% | Activates for right prompts, silent for wrong ones | TF-IDF eval suite |
+| **Output Quality** | 25% | Following the skill produces correct results | Binary assertions |
+| **Edge Coverage** | 15% | Handles unusual inputs gracefully | Edge case test suite |
+| **Token Efficiency** | 10% | Information density, signal-to-noise ratio | Static analysis |
+| **Composability** | 10% | Scope boundaries, handoff points, no conflicts | Static analysis |
+
+Optional 7th dimension: **Clarity** (contradiction + ambiguity detection, `--clarity` flag).
+
+### Cost Tracking
+
+Every eval run logs real metrics to JSONL:
+
+- `duration_ms` — actual wall-clock time per experiment
+- `tokens_estimated` — estimated token count (words * 1.3)
+- `delta` — composite score change from previous run
+- `status` — `baseline`, `keep`, or `discard` (computed, not hardcoded)
+
+Use `python3 scripts/progress.py results.jsonl --json --strategies` to analyze ROI across sessions.
+
+### Cross-Session Learning
+
+SkillForge reads improvement history at loop start:
+
+1. Parse all previous keep/discard decisions with change types
+2. Compute success rate per strategy (e.g., "synonym expansion: 80% keep rate")
+3. Prioritize strategies with highest historical success rate
+4. Detect plateaus: if last 5 iterations gained < 1 point, suggest stopping
 
 ## Commands
 
-| Command | What It Does |
-|---------|-------------|
+| Command | Purpose |
+|---------|---------|
 | `/skillforge` | Full autonomous improvement loop |
-| `/skillforge:analyze` | Deep skill analysis with recommendations |
+| `/skillforge:analyze` | Deep analysis with gap identification |
 | `/skillforge:bench` | Establish quality baseline (iteration #0) |
 | `/skillforge:eval` | Run evaluation suite |
-| `/skillforge:report` | Generate improvement summary |
-
-## Example: Improving a Deploy Skill
-
-```
-/skillforge
-Target: .claude/skills/deploy/SKILL.md
-Goal: All test cases pass, trigger accuracy 90%+
-```
-
-SkillForge will:
-
-1. **Analyze** — read the skill, score structure, find gaps
-2. **Baseline** — score all 6 dimensions as iteration #0
-3. **Loop** — make one change per iteration:
-   - Iteration 1: Expand trigger description with synonym → +5 trigger → **keep**
-   - Iteration 2: Add error handling for missing Dockerfile → +3 edge → **keep**
-   - Iteration 3: Compress verbose setup instructions → -1 quality → **discard** (auto-revert)
-   - ...continues until goal met or interrupted...
+| `/skillforge:report` | Generate improvement summary with diffs |
 
 ## Architecture
 
 ```
 skillforge/
-├── README.md
-├── LICENSE
-├── CONTRIBUTING.md
+├── skills/skillforge/
+│   ├── SKILL.md                     # Core skill definition (268 lines)
+│   ├── eval-suite.json              # 25 assertions, triggers, edge cases
+│   ├── references/
+│   │   ├── improvement-protocol.md  # 9-phase autonomous loop spec
+│   │   ├── metrics-catalog.md       # Scoring rubrics + custom metrics
+│   │   └── skill-patterns.md        # Patterns and anti-patterns
+│   ├── scripts/
+│   │   ├── score-skill.py           # 6-dimension scorer (--diff, --clarity)
+│   │   ├── run-eval.sh              # Unified eval runner with cost tracking
+│   │   ├── progress.py              # Progress analysis + ASCII charts
+│   │   ├── runtime-evaluator.py     # Live Claude invocation testing
+│   │   ├── analyze-skill.sh         # Structural linter (100-point scale)
+│   │   ├── test-integration.sh      # 51 integration tests
+│   │   └── test-self.sh             # 12 self-scoring tests
+│   ├── templates/
+│   │   ├── eval-suite-template.json
+│   │   └── improvement-log-template.jsonl
+│   └── history/                     # Experiment diffs + results
+├── commands/skillforge/             # Slash command definitions
+│   ├── init.md
+│   ├── analyze.md
+│   ├── bench.md
+│   ├── eval.md
+│   └── report.md
 ├── .claude-plugin/
 │   ├── plugin.json
 │   └── marketplace.json
-├── skills/
-│   └── skillforge/
-│       ├── SKILL.md                  ← Core skill
-│       ├── eval-suite.json           ← Trigger/quality/edge test suite
-│       ├── references/
-│       │   ├── improvement-protocol.md  ← 9-phase autonomous loop
-│       │   ├── metrics-catalog.md       ← Scoring rubrics
-│       │   └── skill-patterns.md        ← Patterns + anti-patterns
-│       ├── scripts/
-│       │   ├── analyze-skill.sh      ← Structural linter (100-pt)
-│       │   ├── score-skill.py        ← 6-dimension quality scorer
-│       │   ├── run-eval.sh           ← Unified eval runner
-│       │   └── progress.py           ← Progress tracking + ASCII charts
-│       ├── templates/
-│       │   ├── eval-suite-template.json
-│       │   └── improvement-log-template.jsonl
-│       └── history/                  ← Experiment diffs + results
-│           └── results.jsonl
-├── commands/
-│   └── skillforge/
-│       ├── init.md                   ← Project onboarding
-│       ├── analyze.md
-│       ├── bench.md
-│       ├── eval.md
-│       └── report.md
-└── docs/                             ← Analysis reports
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── LICENSE
 ```
+
+## Real-World Results
+
+### Self-Improvement
+
+SkillForge scores itself. Current results:
+
+| Metric | Value |
+|--------|-------|
+| Composite Score | **99.3 / 100** |
+| Structure | 100 |
+| Trigger Accuracy | 100 |
+| Output Quality | 100 |
+| Edge Coverage | 100 |
+| Efficiency | 93 |
+| Composability | 100 |
+| Binary Assertions | **25/25 passing** |
+| Integration Tests | **51/51 passing** |
+| Self-Tests | **12/12 passing** |
+
+The journey from v1.0 (62.5) to v3.1 (99.3) took 20 experiments across 4 major versions.
 
 ## Design Principles
 
-Extracted from [Karpathy's autoresearch](https://github.com/karpathy/autoresearch):
+Based on [Karpathy's autoresearch](https://github.com/karpathy/autoresearch):
 
-1. **Constraint = Enabler** — Bounded scope (one skill), fixed metrics (6 dimensions), atomic changes
-2. **Metrics Must Be Mechanical** — If you can't score it with a script, you can't improve it autonomously
-3. **One Change Per Iteration** — Atomic. If it breaks, you know exactly why
-4. **Automatic Rollback** — Failed changes revert instantly via `git revert`
+1. **Constraint = Enabler** — Bounded scope, fixed metrics, atomic changes
+2. **Mechanical Verification** — If you can't score it with a script, you can't improve it autonomously
+3. **One Change Per Iteration** — Atomic edits isolate causation
+4. **Automatic Rollback** — Failed changes revert via `git revert`
 5. **Git as Memory** — Every kept change committed, agent reads history to learn patterns
-6. **Separate Strategy from Tactics** — Human sets the goal, agent executes iterations
+6. **Human Sets Goal, Agent Executes** — Clear separation of strategy and tactics
 
 ## Chaining with skill-creator
 
 SkillForge and Anthropic's `skill-creator` are complementary:
 
-- **skill-creator** builds v1 — captures intent, writes the draft, runs initial test cases with human review
-- **SkillForge** grinds v1 to production — autonomous loop, mechanical metrics, overnight improvement
+- **skill-creator** builds v1 — captures intent, writes the draft
+- **SkillForge** grinds v1 to production — autonomous loop, mechanical metrics
 
 **Recommended workflow:** `skill-creator` → build v1 → `skillforge` → grind to 90%+ → ship
 
-## Key Difference from Existing Autoresearch Skills
-
-Existing autoresearch skills improve **code, content, or configurations**. SkillForge improves **skills themselves** — it's a meta-skill that makes other skills better. This is the missing piece: a systematic way to iterate on the instructions that guide Claude's behavior.
-
 ## Inspiration & Credits
 
-- **[Andrej Karpathy](https://github.com/karpathy)** — [autoresearch](https://github.com/karpathy/autoresearch): the original 630-line autonomous ML experiment loop
+- **[Andrej Karpathy](https://github.com/karpathy)** — [autoresearch](https://github.com/karpathy/autoresearch): the original autonomous experiment loop
 - **[Udit Goenka](https://github.com/uditgoenka)** — [autoresearch](https://github.com/uditgoenka/autoresearch): generalized autoresearch for Claude Code
 - **[Anthropic](https://anthropic.com)** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skills system
 

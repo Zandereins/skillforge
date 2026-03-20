@@ -21,6 +21,19 @@ from collections import Counter
 from typing import Optional
 from pathlib import Path
 
+# Maximum skill file size (1 MB) to prevent DoS via large inputs
+MAX_SKILL_SIZE = 1_000_000
+
+
+def _read_skill_safe(skill_path: str) -> str:
+    """Read a skill file with size limit enforcement."""
+    p = Path(skill_path)
+    if not p.exists():
+        raise FileNotFoundError(f"Skill file not found: {skill_path}")
+    if p.stat().st_size > MAX_SKILL_SIZE:
+        raise ValueError(f"Skill file exceeds {MAX_SKILL_SIZE} bytes")
+    return p.read_text(encoding="utf-8", errors="replace")
+
 
 # --- Stopwords for trigger scoring (truly generic function words only) ---
 # IMPORTANT: Do NOT include domain-relevant terms here. Words like "skill",
@@ -67,8 +80,8 @@ def _score_structure_inline(skill_path: str) -> dict:
     issues = []
 
     try:
-        content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
+        content = _read_skill_safe(skill_path)
+    except (FileNotFoundError, ValueError):
         return {"score": 0, "issues": ["file_not_found"], "details": {}}
 
     lines = content.split("\n")
@@ -141,7 +154,7 @@ def _score_structure_inline(skill_path: str) -> dict:
         score += 5
         issues.append(f"missing_refs: {missing}")
 
-    return {"score": min(score, 100), "issues": issues, "details": {"line_count": len(lines)}}
+    return {"score": max(0, min(100, score)), "issues": issues, "details": {"line_count": len(lines)}}
 
 
 def _extract_description(content: str) -> str:
@@ -266,7 +279,10 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
     if not eval_suite or "triggers" not in eval_suite:
         return {"score": -1, "issues": ["no_trigger_eval_suite"], "details": {}}
 
-    content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
+    try:
+        content = _read_skill_safe(skill_path)
+    except (FileNotFoundError, ValueError):
+        return {"score": 0, "issues": ["file_not_found"], "details": {}}
     description = _extract_description(content)
 
     if not description:
@@ -397,7 +413,11 @@ def score_efficiency(skill_path: str) -> dict:
     headers or code blocks. It should reward delivering more value in
     fewer words.
     """
-    content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
+    try:
+        content = _read_skill_safe(skill_path)
+    except (FileNotFoundError, ValueError):
+        return {"score": 0, "issues": ["file_not_found"], "details": {}}
+
     full_content = content
 
     # Strip frontmatter for body analysis
@@ -557,8 +577,8 @@ def score_composability(skill_path: str) -> dict:
     - No conflicting tool assumptions (20 pts)
     """
     try:
-        content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
+        content = _read_skill_safe(skill_path)
+    except (FileNotFoundError, ValueError):
         return {"score": 0, "issues": ["file_not_found"], "details": {}}
 
     score = 0
@@ -890,6 +910,13 @@ def compute_composite(scores: dict) -> dict:
         "composability": 0.10,
     }
 
+    # If clarity is present, add it with weight 0.05 redistributed from others
+    if "clarity" in scores:
+        clarity_weight = 0.05
+        redistribution = clarity_weight / len(weights)
+        weights = {k: v - redistribution for k, v in weights.items()}
+        weights["clarity"] = clarity_weight
+
     total = 0.0
     weight_sum = 0.0
     measured = []
@@ -935,11 +962,248 @@ def compute_composite(scores: dict) -> dict:
     }
 
 
+def score_clarity(skill_path: str) -> dict:
+    """Score instruction clarity — detect contradictions, ambiguity, vague references.
+
+    Optional 7th dimension with zero default weight. Activated via --clarity.
+
+    Sub-checks (100 pts total):
+    - Contradiction detection (30 pts): "always X" vs "never X" on same topic
+    - Vague reference detection (25 pts): "the file" without antecedent
+    - Ambiguous pronoun detection (20 pts): sentences starting with It/This/That
+    - Instruction completeness (25 pts): every "Run X" has a concrete command
+    """
+    try:
+        content = _read_skill_safe(skill_path)
+    except (FileNotFoundError, ValueError):
+        return {"score": 0, "issues": ["file_not_found"], "details": {}}
+
+    # Strip frontmatter
+    body = content
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end > 0:
+            body = content[end + 3:]
+
+    # Strip code blocks before clarity analysis (avoid false positives
+    # from "always"/"never" inside code examples)
+    prose_body = re.sub(r"```[\s\S]*?```", "", body)
+
+    lines = prose_body.strip().split("\n")
+
+    # Empty body check
+    if not prose_body.strip():
+        return {"score": 0, "issues": ["empty_skill_body"], "details": {}}
+
+    score = 100
+    issues = []
+    details: dict = {}
+
+    # 1. Contradiction detection (30 pts)
+    # Find "always/never/must/must not" pairs on overlapping topics
+    # Compare first verb only to catch "always run X" vs "never run Y"
+    always_patterns = re.findall(r"(?i)\b(always|must)\s+(\w+(?:\s+\w+)?)", prose_body)
+    never_patterns = re.findall(r"(?i)\b(never|must not|do not|don't)\s+(\w+(?:\s+\w+)?)", prose_body)
+
+    always_topics = {topic.lower().strip() for _, topic in always_patterns}
+    never_topics = {topic.lower().strip() for _, topic in never_patterns}
+    contradictions = always_topics & never_topics
+
+    if contradictions:
+        penalty = min(30, len(contradictions) * 10)
+        score -= penalty
+        issues.append(f"contradictions:{len(contradictions)}")
+        details["contradictions"] = sorted(contradictions)
+    details["always_count"] = len(always_patterns)
+    details["never_count"] = len(never_patterns)
+
+    # 2. Vague reference detection (25 pts)
+    # "the file", "the script", "the output" without clear antecedent in preceding 3 lines
+    vague_refs = []
+    vague_pattern = re.compile(r"\b(the\s+(?:file|script|output|result|command|path|tool|config))\b", re.IGNORECASE)
+    for i, line in enumerate(lines):
+        matches = vague_pattern.findall(line)
+        for match in matches:
+            # Check preceding 3 lines for a specific file/path reference
+            context = "\n".join(lines[max(0, i - 3):i])
+            # If no specific path, filename, or backtick-quoted reference nearby, it's vague
+            if not re.search(r"(`[^`]+`|[\w/]+\.\w+|/[\w/]+)", context):
+                vague_refs.append(f"line {i + 1}: {match}")
+
+    if vague_refs:
+        penalty = min(25, len(vague_refs) * 5)
+        score -= penalty
+        issues.append(f"vague_references:{len(vague_refs)}")
+    details["vague_references"] = len(vague_refs)
+
+    # 3. Ambiguous pronoun detection (20 pts)
+    # Sentences starting with "It ", "This ", "That " without clear referent
+    ambiguous_pronouns = []
+    pronoun_pattern = re.compile(r"^\s*(It|This|That)\s+(is|does|will|can|should|has|was|means)\b")
+    for i, line in enumerate(lines):
+        if pronoun_pattern.match(line):
+            # Check if preceding line provides a clear subject
+            if i > 0:
+                prev = lines[i - 1].strip()
+                # If previous line is empty or a header, the pronoun is ambiguous
+                if not prev or prev.startswith("#"):
+                    ambiguous_pronouns.append(f"line {i + 1}")
+
+    if ambiguous_pronouns:
+        penalty = min(20, len(ambiguous_pronouns) * 5)
+        score -= penalty
+        issues.append(f"ambiguous_pronouns:{len(ambiguous_pronouns)}")
+    details["ambiguous_pronouns"] = len(ambiguous_pronouns)
+
+    # 4. Instruction completeness (25 pts)
+    # Every "Run X" / "Execute X" should have a concrete command or path
+    # Skip conceptual uses like "Run eval evolution BETWEEN sessions"
+    incomplete_instructions = []
+    run_pattern = re.compile(r"^\s*(?:\d+\.\s*)?(?:Run|Execute|Install|Configure)\s+(.+)", re.IGNORECASE)
+    # Conceptual continuations that aren't shell commands
+    conceptual_pattern = re.compile(
+        r"(?i)(baseline|all\s+\d+|VERIFY|evolution|the\s+\w+\s+(?:on|for|to|with|against))",
+    )
+    for i, line in enumerate(lines):
+        m = run_pattern.match(line)
+        if m:
+            rest = m.group(1).strip()
+            # Skip conceptual instructions (not meant as shell commands)
+            if conceptual_pattern.search(rest):
+                continue
+            # Check if there's a backtick command, a path, or a code block nearby
+            has_concrete = bool(re.search(r"(`[^`]+`|[\w/.-]+\.\w+|/[\w/]+)", rest))
+            # Also check next line for a code block
+            if not has_concrete and i + 1 < len(lines):
+                has_concrete = lines[i + 1].strip().startswith("```")
+            if not has_concrete:
+                incomplete_instructions.append(f"line {i + 1}: {line.strip()[:60]}")
+
+    if incomplete_instructions:
+        penalty = min(25, len(incomplete_instructions) * 8)
+        score -= penalty
+        issues.append(f"incomplete_instructions:{len(incomplete_instructions)}")
+    details["incomplete_instructions"] = len(incomplete_instructions)
+
+    return {
+        "score": max(0, score),
+        "issues": issues,
+        "details": details,
+    }
+
+
+def score_diff(skill_path: str, diff_ref: str = "HEAD~1") -> dict:
+    """Analyze git diff to explain WHY a score changed.
+
+    Classifies added/removed lines using signal/noise patterns from
+    score_efficiency() to determine net quality impact.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", diff_ref, "--", skill_path],
+            capture_output=True, text=True, timeout=10, errors="replace"
+        )
+        if result.returncode != 0:
+            return {"available": False, "reason": "git diff failed (invalid ref or not in git repo)"}
+        if not result.stdout.strip():
+            return {"available": False, "reason": "no changes between refs"}
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return {"available": False, "reason": "git not available"}
+
+    diff_text = result.stdout
+    added_lines = [line[1:] for line in diff_text.split("\n") if line.startswith("+") and not line.startswith("+++")]
+    removed_lines = [line[1:] for line in diff_text.split("\n") if line.startswith("-") and not line.startswith("---")]
+
+    # Signal patterns (from score_efficiency)
+    signal_pattern = re.compile(
+        r"^(?:\d+\.\s*)?(?:Read|Run|Check|Create|Add|Remove|Move|Use|Set|"
+        r"Install|Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|"
+        r"Copy|Delete|Write|Edit|Update|Generate|Execute|Validate|Parse|"
+        r"Extract|Transform|Import|Export|Send|Fetch|Call|Return)\b",
+        re.IGNORECASE
+    )
+    example_pattern = re.compile(
+        r"(?i)(example\s*[0-9:#]|input.*output|e\.g\.|for instance|for example)"
+    )
+    noise_pattern = re.compile(
+        r"(?i)(you (might|could|should|may) (want to|consider|possibly)|"
+        r"it is important to note that|as mentioned (above|earlier|before)|"
+        r"in other words|keep in mind that|note that|please note|"
+        r"make sure to save|don't forget to|always test your)"
+    )
+
+    def classify_lines(lines: list[str]) -> dict:
+        signals = sum(1 for l in lines if signal_pattern.search(l) or example_pattern.search(l))
+        noise = sum(1 for l in lines if noise_pattern.search(l))
+        neutral = max(0, len(lines) - signals - noise)
+        return {"signal": signals, "noise": noise, "neutral": neutral, "total": len(lines)}
+
+    added = classify_lines(added_lines)
+    removed = classify_lines(removed_lines)
+
+    net_signal = added["signal"] - removed["signal"]
+    net_noise = added["noise"] - removed["noise"]
+
+    return {
+        "available": True,
+        "diff_ref": diff_ref,
+        "added": added,
+        "removed": removed,
+        "net_change": {
+            "signal": net_signal,
+            "noise": net_noise,
+            "lines": added["total"] - removed["total"],
+        },
+    }
+
+
+def explain_score_change(old_scores: dict, new_scores: dict, diff_analysis: dict) -> list:
+    """Generate per-dimension explanations for score changes.
+
+    Returns a list of explanation dicts with dimension, delta, and reason.
+    """
+    explanations = []
+    all_dims = set(list(old_scores.keys()) + list(new_scores.keys()))
+
+    for dim in sorted(all_dims):
+        old_val = old_scores.get(dim, 0)
+        new_val = new_scores.get(dim, 0)
+        delta = new_val - old_val
+
+        if abs(delta) < 0.5:
+            continue
+
+        reason = f"{dim}: {old_val} -> {new_val} ({delta:+.1f})"
+
+        # Add context from diff if available
+        if diff_analysis.get("available"):
+            net = diff_analysis.get("net_change", {})
+            if dim == "efficiency" and net.get("noise", 0) < 0:
+                reason += " (noise removed)"
+            elif dim == "efficiency" and net.get("signal", 0) > 0:
+                reason += " (signal added)"
+            elif dim == "structure" and net.get("lines", 0) < 0:
+                reason += " (file shortened)"
+
+        explanations.append({
+            "dimension": dim,
+            "old": old_val,
+            "new": new_val,
+            "delta": round(delta, 1),
+            "explanation": reason,
+        })
+
+    return explanations
+
+
 def main():
     parser = argparse.ArgumentParser(description="SkillForge Quality Scorer")
     parser.add_argument("skill_path", help="Path to SKILL.md")
     parser.add_argument("--eval-suite", help="Path to eval suite JSON", default=None)
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--diff", action="store_true", help="Include diff analysis")
+    parser.add_argument("--diff-ref", default="HEAD~1", help="Git ref to diff against (default: HEAD~1)")
+    parser.add_argument("--clarity", action="store_true", help="Include clarity dimension (zero weight by default)")
     args = parser.parse_args()
 
     eval_suite = None
@@ -961,6 +1225,10 @@ def main():
         "composability": score_composability(args.skill_path),
     }
 
+    # Clarity dimension (opt-in, zero default weight)
+    if args.clarity:
+        scores["clarity"] = score_clarity(args.skill_path)
+
     composite_result = compute_composite(scores)
 
     result = {
@@ -977,6 +1245,18 @@ def main():
         "issues": {k: v["issues"] for k, v in scores.items() if v["issues"]},
         "details": {k: v["details"] for k, v in scores.items() if v["details"]},
     }
+
+    # Diff analysis (opt-in)
+    if args.diff:
+        diff_analysis = score_diff(args.skill_path, args.diff_ref)
+        result["diff_analysis"] = diff_analysis
+        # Wire explain_score_change into diff output
+        # Use current scores as "new" and zeros as "old" placeholder
+        # (real old scores would come from previous run's JSON)
+        current_scores = {k: v["score"] for k, v in scores.items() if v["score"] >= 0}
+        explanations = explain_score_change({}, current_scores, diff_analysis)
+        if explanations:
+            result["score_explanations"] = explanations
 
     if args.json:
         print(json.dumps(result, indent=2))

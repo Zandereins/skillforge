@@ -47,56 +47,63 @@ class ProgressAnalyzer:
                 if line:
                     try:
                         self.experiments.append(json.loads(line))
-                    except json.JSONDecodeError as e:
+                    except json.JSONDecodeError:
                         print(f"Warning: Invalid JSON on line: {line[:50]}...", file=sys.stderr)
                         continue
 
-    def get_baseline(self) -> Optional[Dict[str, Any]]:
+        if not self.experiments:
+            raise ValueError(f"No valid experiments found in: {self.results_path}")
+
+    def get_baseline(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
         """Get the baseline (first) experiment if available."""
-        if self.experiments and self.experiments[0].get("status") == "baseline":
-            return self.experiments[0]
-        # Find first with status=baseline
-        for exp in self.experiments:
+        exps = experiments if experiments is not None else self.experiments
+        if exps and exps[0].get("status") == "baseline":
+            return exps[0]
+        for exp in exps:
             if exp.get("status") == "baseline":
                 return exp
         return None
 
-    def get_current_best(self) -> Optional[Dict[str, Any]]:
+    def get_current_best(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
         """Get the best kept experiment."""
+        exps = experiments if experiments is not None else self.experiments
         best = None
-        for exp in self.experiments:
+        for exp in exps:
             if exp.get("status") == "keep":
                 if best is None or exp.get("composite", 0) > best.get("composite", 0):
                     best = exp
         return best
 
-    def get_latest_kept(self) -> Optional[Dict[str, Any]]:
+    def get_latest_kept(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
         """Get the most recent kept experiment."""
-        for exp in reversed(self.experiments):
+        exps = experiments if experiments is not None else self.experiments
+        for exp in reversed(exps):
             if exp.get("status") == "keep":
                 return exp
         return None
 
-    def count_outcomes(self) -> Tuple[int, int, int]:
+    def count_outcomes(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Tuple[int, int, int]:
         """
         Count experiment outcomes.
 
         Returns:
             Tuple of (keep_count, discard_count, crash_count)
         """
-        keep = sum(1 for e in self.experiments if e.get("status") == "keep")
-        discard = sum(1 for e in self.experiments if e.get("status") == "discard")
-        crash = sum(1 for e in self.experiments if e.get("status") == "crash")
+        exps = experiments if experiments is not None else self.experiments
+        keep = sum(1 for e in exps if e.get("status") == "keep")
+        discard = sum(1 for e in exps if e.get("status") == "discard")
+        crash = sum(1 for e in exps if e.get("status") == "crash")
         return keep, discard, crash
 
-    def analyze_trends(self) -> Dict[str, str]:
+    def analyze_trends(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, str]:
         """
         Analyze per-dimension trends.
 
         Returns:
             Dict mapping dimension name to trend ('improving', 'stable', 'declining')
         """
-        kept_exps = [e for e in self.experiments if e.get("status") == "keep"]
+        exps = experiments if experiments is not None else self.experiments
+        kept_exps = [e for e in exps if e.get("status") == "keep"]
         if len(kept_exps) < 2:
             return {}
 
@@ -123,35 +130,37 @@ class ProgressAnalyzer:
 
         return trends
 
-    def get_pass_rate_trend(self) -> List[Tuple[int, str]]:
+    def get_pass_rate_trend(self, experiments: Optional[List[Dict[str, Any]]] = None) -> List[Tuple[int, str]]:
         """
         Get binary eval pass rate trend across kept experiments.
 
         Returns:
             List of (exp_number, pass_rate_string) tuples
         """
+        exps = experiments if experiments is not None else self.experiments
         trend = []
-        for exp in self.experiments:
+        for exp in exps:
             if exp.get("status") == "keep" and "pass_rate" in exp:
                 trend.append((exp.get("exp"), exp.get("pass_rate")))
         return trend
 
-    def get_streaks(self) -> Tuple[int, str, int]:
+    def get_streaks(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Tuple[int, str, int]:
         """
         Analyze consecutive keep/discard streaks.
 
         Returns:
             Tuple of (streak_length, streak_type, streak_end_exp)
         """
-        if not self.experiments:
+        exps = experiments if experiments is not None else self.experiments
+        if not exps:
             return 0, "", 0
 
         current_streak = 1
-        current_type = self.experiments[-1].get("status")
+        current_type = exps[-1].get("status")
         streak_type = current_type if current_type in ("keep", "discard") else ""
-        streak_end = self.experiments[-1].get("exp", 0)
+        streak_end = exps[-1].get("exp", 0)
 
-        for exp in reversed(self.experiments[:-1]):
+        for exp in reversed(exps[:-1]):
             status = exp.get("status")
             if status == current_type and status in ("keep", "discard"):
                 current_streak += 1
@@ -199,34 +208,36 @@ class ProgressAnalyzer:
         iterations = int(math.ceil(remaining / slope))
         return max(1, iterations)
 
-    def get_time_metrics(self) -> Tuple[float, float]:
+    def get_time_metrics(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Tuple[float, float]:
         """
         Get time elapsed and average time per iteration.
 
         Returns:
             Tuple of (total_seconds, avg_seconds_per_iteration)
         """
-        if not self.experiments:
+        exps = experiments if experiments is not None else self.experiments
+        if not exps:
             return 0, 0
 
-        total_ms = sum(e.get("duration_ms", 0) for e in self.experiments)
+        total_ms = sum(e.get("duration_ms", 0) for e in exps)
         total_sec = total_ms / 1000
-        avg_per_iter = total_sec / len(self.experiments) if self.experiments else 0
+        avg_per_iter = total_sec / len(exps) if exps else 0
 
         return total_sec, avg_per_iter
 
-    def get_experiment_velocity(self) -> float:
+    def get_experiment_velocity(self, experiments: Optional[List[Dict[str, Any]]] = None) -> float:
         """
         Get experiments per hour.
 
         Returns:
             Experiments per hour
         """
-        total_sec, _ = self.get_time_metrics()
+        exps = experiments if experiments is not None else self.experiments
+        total_sec, _ = self.get_time_metrics(exps)
         if total_sec == 0:
             return 0
         hours = total_sec / 3600
-        return len(self.experiments) / hours if hours > 0 else 0
+        return len(exps) / hours if hours > 0 else 0
 
     def format_duration(self, seconds: float) -> str:
         """Format duration in human-readable form."""
@@ -236,6 +247,138 @@ class ProgressAnalyzer:
             return f"{seconds / 60:.1f}m"
         else:
             return f"{seconds / 3600:.1f}h"
+
+    # --- Strategy types for meta-learning ---
+    STRATEGY_TYPES = [
+        "trigger_expansion",
+        "example_addition",
+        "noise_reduction",
+        "edge_coverage",
+        "structural_fix",
+        "progressive_disclosure",
+        "composability_fix",
+        "recovery_combo",
+    ]
+
+    # Keywords used to infer strategy type from experiment descriptions
+    _STRATEGY_KEYWORDS = {
+        "trigger_expansion": ["synonym", "trigger", "description", "boundary", "negative boundary"],
+        "example_addition": ["example", "input/output", "before/after", "sample"],
+        "noise_reduction": ["compress", "trim", "remove", "verbose", "noise", "filler", "concise", "lean"],
+        "edge_coverage": ["edge", "malformed", "corner", "error", "fallback", "unicode"],
+        "structural_fix": ["frontmatter", "header", "section", "structure", "format", "lint"],
+        "progressive_disclosure": ["reference", "extract", "progressive", "disclosure", "split"],
+        "composability_fix": ["scope", "handoff", "composab", "conflict", "boundary"],
+        "recovery_combo": ["recovery", "combo", "revert", "fix", "workaround"],
+    }
+
+    def _infer_strategy(self, description: str) -> Optional[str]:
+        """Infer strategy type from experiment description using keywords."""
+        desc_lower = description.lower()
+        best_match = None
+        best_count = 0
+        for strategy, keywords in self._STRATEGY_KEYWORDS.items():
+            count = sum(1 for kw in keywords if kw in desc_lower)
+            if count > best_count:
+                best_count = count
+                best_match = strategy
+        return best_match if best_count > 0 else None
+
+    def compute_strategy_stats(self, experiments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Dict[str, Any]]:
+        """Compute effectiveness stats per strategy type.
+
+        Groups experiments by strategy_type (explicit field or inferred from
+        description), then computes keep_rate and avg_delta per strategy.
+        """
+        exps = experiments if experiments is not None else self.experiments
+        strategy_data: Dict[str, List[Dict[str, Any]]] = {}
+
+        for exp in exps:
+            if exp.get("status") in ("baseline",):
+                continue
+
+            # Explicit strategy_type takes precedence
+            strategy = exp.get("strategy_type")
+            if not strategy:
+                strategy = self._infer_strategy(exp.get("description", ""))
+            if not strategy:
+                strategy = "unknown"
+
+            if strategy not in strategy_data:
+                strategy_data[strategy] = []
+            strategy_data[strategy].append(exp)
+
+        stats = {}
+        for strategy, exps in strategy_data.items():
+            kept = [e for e in exps if e.get("status") == "keep"]
+            keep_rate = len(kept) / len(exps) if exps else 0
+            deltas = [e.get("delta", 0) for e in kept]
+            avg_delta = sum(deltas) / len(deltas) if deltas else 0
+
+            stats[strategy] = {
+                "total": len(exps),
+                "kept": len(kept),
+                "keep_rate": round(keep_rate, 2),
+                "avg_delta": round(avg_delta, 2),
+                "effectiveness": round(keep_rate * avg_delta, 2),
+            }
+
+        return stats
+
+    def get_recommended_strategy_order(self, experiments: Optional[List[Dict[str, Any]]] = None) -> List[str]:
+        """Return strategies sorted by effectiveness (keep_rate * avg_delta)."""
+        stats = self.compute_strategy_stats(experiments)
+        return sorted(
+            stats.keys(),
+            key=lambda s: stats[s]["effectiveness"],
+            reverse=True,
+        )
+
+    def classify_eval_health(self, window: int = 10, experiments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, List[str]]:
+        """Classify eval test cases as mastered, blocked, or flaky.
+
+        Looks at the last `window` kept experiments to determine test health:
+        - mastered: always passes for 10+ iterations (reduce weight)
+        - blocked: always fails (needs investigation)
+        - flaky: inconsistent (unreliable signal)
+        """
+        exps = experiments if experiments is not None else self.experiments
+        kept_exps = [e for e in exps if e.get("status") == "keep"][-window:]
+
+        if len(kept_exps) < 3:
+            return {"mastered": [], "blocked": [], "flaky": [], "healthy": []}
+
+        # Collect pass/fail history per test case from pass_rate or binary results
+        # Since we track composite scores, not individual test results,
+        # classify based on score stability per dimension
+        dim_scores: Dict[str, List[float]] = {}
+        for exp in kept_exps:
+            scores = exp.get("scores", {})
+            for dim, val in scores.items():
+                if not isinstance(val, (int, float)) or val < 0:
+                    continue  # skip unmeasured sentinel (-1)
+                if dim not in dim_scores:
+                    dim_scores[dim] = []
+                dim_scores[dim].append(val)
+
+        result: Dict[str, List[str]] = {"mastered": [], "blocked": [], "flaky": [], "healthy": []}
+
+        for dim, values in dim_scores.items():
+            if not values:
+                continue
+            avg = sum(values) / len(values)
+            variance = sum((v - avg) ** 2 for v in values) / len(values)
+
+            if avg >= 95 and variance < 5:
+                result["mastered"].append(dim)
+            elif avg < 50 and variance < 10:
+                result["blocked"].append(dim)
+            elif variance > 50:
+                result["flaky"].append(dim)
+            else:
+                result["healthy"].append(dim)
+
+        return result
 
     def generate_summary(
         self,
@@ -256,15 +399,15 @@ class ProgressAnalyzer:
         if since:
             exps = exps[-since:]
 
-        baseline = self.get_baseline()
-        current_best = self.get_current_best()
-        latest_kept = self.get_latest_kept()
-        keep, discard, crash = self.count_outcomes()
-        trends = self.analyze_trends()
-        pass_rates = self.get_pass_rate_trend()
-        streak_len, streak_type, streak_end = self.get_streaks()
-        total_sec, avg_per_iter = self.get_time_metrics()
-        velocity = self.get_experiment_velocity()
+        baseline = self.get_baseline(exps)
+        current_best = self.get_current_best(exps)
+        latest_kept = self.get_latest_kept(exps)
+        keep, discard, crash = self.count_outcomes(exps)
+        trends = self.analyze_trends(exps)
+        pass_rates = self.get_pass_rate_trend(exps)
+        streak_len, streak_type, streak_end = self.get_streaks(exps)
+        total_sec, avg_per_iter = self.get_time_metrics(exps)
+        velocity = self.get_experiment_velocity(exps)
 
         summary: Dict[str, Any] = {
             "total_experiments": len(exps),
@@ -294,6 +437,19 @@ class ProgressAnalyzer:
                 "current": current_best.get("composite", 0),
                 "estimated_iterations": est,
             }
+
+        # Strategy meta-learning
+        strategy_stats = self.compute_strategy_stats(exps)
+        if strategy_stats:
+            summary["strategies"] = {
+                "stats": strategy_stats,
+                "recommended_order": self.get_recommended_strategy_order(exps),
+            }
+
+        # Eval health classification
+        eval_health = self.classify_eval_health(experiments=exps)
+        if any(eval_health.values()):
+            summary["eval_health"] = eval_health
 
         return summary
 
@@ -398,6 +554,21 @@ class ProgressAnalyzer:
                 )
                 lines.append("")
 
+        # Strategy effectiveness
+        if "strategies" in summary and summary["strategies"]["stats"]:
+            lines.append("Strategy Effectiveness:")
+            lines.append("-" * 50)
+            for strategy in summary["strategies"]["recommended_order"]:
+                s = summary["strategies"]["stats"][strategy]
+                lines.append(
+                    f"  {strategy:25s} "
+                    f"keep={s['keep_rate']:.0%} "
+                    f"avg_delta={s['avg_delta']:+.1f} "
+                    f"eff={s['effectiveness']:.2f} "
+                    f"({s['kept']}/{s['total']})"
+                )
+            lines.append("")
+
         if include_chart and "latest_kept" in summary and summary["latest_kept"]:
             chart = self._generate_chart()
             if chart:
@@ -480,12 +651,16 @@ def main() -> None:
     parser.add_argument(
         "--goal", type=float, help="Target composite score for estimation"
     )
+    parser.add_argument(
+        "--strategies", action="store_true",
+        help="Include strategy meta-learning analysis"
+    )
 
     args = parser.parse_args()
 
     try:
         analyzer = ProgressAnalyzer(args.results_file)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 

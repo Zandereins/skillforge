@@ -92,8 +92,10 @@ Use constraints to prevent dimension degradation during optimization.
 | **Edge coverage** | Edge-case test pass rate | Malformed input, corner cases | ≥ 80% |
 | **Token efficiency** | Instruction density (words per feature) | `scripts/score-skill.py` | ≤ target |
 | **Composability** | Cross-skill conflict tests | Run with other skills | 0 conflicts |
+| **Clarity** *(opt-in)* | Contradiction + ambiguity score | `score-skill.py --clarity` | ≥ 80% |
 
-Validate scores against real behavior: run the skill on test prompts and check output.
+Validate scores against real behavior: use `scripts/runtime-evaluator.py` to invoke Claude
+with test prompts and check actual output against assertions.
 See `references/metrics-catalog.md` for detailed rubrics and custom metric setup.
 
 ## Custom Metrics
@@ -174,7 +176,7 @@ Run `/skillforge:analyze` without a GOAL. SkillForge will:
 
 Use discovery mode when the user says "my skill needs work" without specifying what.
 
-## Parallel Experimentation (Try 3, Keep Best)
+## Parallel Experimentation (Try 3, Keep Best) — Planned
 
 For iterations where multiple plausible changes exist:
 1. Create 3 candidate changes on separate git branches using `git worktree`.
@@ -185,40 +187,31 @@ For iterations where multiple plausible changes exist:
 Use parallel mode when stuck (5+ sequential discards) or when the gap-to-target
 is large (>15 points). Explores 3x more search space per iteration.
 
-## Noisy Metric Handling
+## Noisy Metric + Interaction Effects
 
-When metrics fluctuate (±5%), use multi-run averaging:
-1. Run VERIFY 3 times per iteration. Use the median score.
-2. Keep only if improvement > 2 * noise floor.
-3. Detect noise floor from the first 3 baseline runs.
+When metrics fluctuate (±5%): run VERIFY 3 times, use median, keep only if
+improvement > 2 * noise floor (detected from first 3 baseline runs).
 
-## Interaction Effect Detection
-
-Individual keeps can interact badly. Guard against composite degradation:
-1. Every 5 iterations, compare composite against the score from 5 iterations ago.
-2. If composite dropped > 2 points over the window despite individual keeps passing,
-   review ALL kept changes in the window for pairwise contradictions.
-3. Revert to the best-in-window checkpoint. Re-apply only non-conflicting keeps.
-
-Use this to catch cases where adding edge case A (+0.5) and edge case B (+0.3)
-creates contradictory instructions that degrade the composite by -3 over 10 iterations.
+Guard against interaction effects: every 5 iterations, compare composite against
+5 iterations ago. If composite dropped > 2 points despite individual keeps, revert
+to best-in-window checkpoint and re-apply only non-conflicting keeps.
 
 ## Cost Tracking + ROI
 
 Track improvement efficiency to stop when returns diminish:
-1. Count iterations and estimate tokens per experiment (~2k-5k per iteration).
+1. `run-eval.sh --log` records `duration_ms`, `tokens_estimated`, `delta`, and `status` per run.
 2. Compute ROI: `delta_metric / iterations_spent` after each keep.
 3. Stop when ROI drops below threshold (e.g., last 5 iterations < 0.5 points gained).
-4. Log `tokens_estimated` to `history/results.jsonl` for cross-session ROI comparison.
+4. Use `progress.py --json` to compare cross-session ROI from logged data.
 
 Stop grinding when ROI drops below threshold to prevent wasted iterations.
 
 ## Self-Evolving Eval Suites
 
 After every 10 iterations, analyze eval suite effectiveness:
-1. Classify tests as "mastered" (always pass for 10+ iterations), "blocked" (always fail), or "flaky" (inconsistent).
+1. Classify tests as "mastered", "blocked", or "flaky" via `classify_eval_health()`.
 2. Reduce weight of mastered tests — they no longer discriminate quality changes.
-3. Generate new test cases targeting uncovered gaps found during discovery mode.
+3. Auto-generation of new test cases: classification implemented, auto-generation planned.
 4. Log eval mutations to `history/` separately from skill changes.
 
 Run eval evolution BETWEEN sessions, not during the loop, because this preserves
@@ -265,10 +258,11 @@ Create new skills with `skill-creator`. For crashing skills, suggest using
 ## Files
 
 Run `ls -R` in the skill directory. Run `python3 scripts/score-skill.py SKILL.md --json` for current scores. Key files:
-- `scripts/score-skill.py` — Run to compute all 6 dimension scores
+- `scripts/score-skill.py` — Compute dimension scores (`--diff` for change analysis, `--clarity` for 7th dimension)
+- `scripts/runtime-evaluator.py` — Invoke Claude with test prompts, check real output
 - `scripts/analyze-skill.sh` — Run for structural lint (100-point check)
-- `scripts/run-eval.sh` — Run eval suite with assertion validation
-- `scripts/progress.py` — Generate convergence charts from `history/results.jsonl`
+- `scripts/run-eval.sh` — Run eval suite (`--runtime` to include runtime evaluation)
+- `scripts/progress.py` — Convergence charts + strategy analysis (`--strategies`)
 - `references/improvement-protocol.md` — Full 9-phase autonomous loop spec
 - `references/metrics-catalog.md` — Scoring rubrics + custom metric setup
 - `templates/eval-suite-template.json` — Eval skeleton for new skills

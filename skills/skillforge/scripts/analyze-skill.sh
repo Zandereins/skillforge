@@ -140,6 +140,8 @@ MISSING_REFS=0
 MISSING_REF_LIST=()
 while IFS= read -r ref; do
   [[ -z "$ref" ]] && continue
+  # Block path traversal attempts
+  [[ "$ref" == *".."* ]] && continue
   ref_path="$SKILL_DIR/$ref"
   if [[ ! -f "$ref_path" && ! -d "$ref_path" ]]; then
     MISSING_REFS=$((MISSING_REFS + 1))

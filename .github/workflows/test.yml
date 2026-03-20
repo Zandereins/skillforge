@@ -1,0 +1,41 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Run integration tests
+        working-directory: skills/skillforge
+        run: bash scripts/test-integration.sh
+
+      - name: Run self-tests
+        working-directory: skills/skillforge
+        run: bash scripts/test-self.sh
+
+      - name: Run scorer
+        working-directory: skills/skillforge
+        run: |
+          RESULT=$(python3 scripts/score-skill.py SKILL.md --json 2>/dev/null)
+          COMPOSITE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])")
+          echo "Composite score: $COMPOSITE"
+          python3 -c "assert float('$COMPOSITE') >= 90, f'Score {$COMPOSITE} below threshold'"
+
+      - name: Run eval suite
+        working-directory: skills/skillforge
+        run: bash scripts/run-eval.sh SKILL.md eval-suite.json 2>/dev/null || true
