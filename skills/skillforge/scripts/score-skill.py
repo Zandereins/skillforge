@@ -890,6 +890,13 @@ def compute_composite(scores: dict) -> dict:
         "composability": 0.10,
     }
 
+    # If clarity is present, add it with weight 0.05 redistributed from others
+    if "clarity" in scores:
+        clarity_weight = 0.05
+        redistribution = clarity_weight / len(weights)
+        weights = {k: v - redistribution for k, v in weights.items()}
+        weights["clarity"] = clarity_weight
+
     total = 0.0
     weight_sum = 0.0
     measured = []
@@ -932,6 +939,118 @@ def compute_composite(scores: dict) -> dict:
         "weight_coverage": confidence,
         "unmeasured": unmeasured,
         "warnings": warnings,
+    }
+
+
+def score_clarity(skill_path: str) -> dict:
+    """Score instruction clarity — detect contradictions, ambiguity, vague references.
+
+    Optional 7th dimension with zero default weight. Activated via --clarity.
+
+    Sub-checks (100 pts total):
+    - Contradiction detection (30 pts): "always X" vs "never X" on same topic
+    - Vague reference detection (25 pts): "the file" without antecedent
+    - Ambiguous pronoun detection (20 pts): sentences starting with It/This/That
+    - Instruction completeness (25 pts): every "Run X" has a concrete command
+    """
+    try:
+        content = Path(skill_path).read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return {"score": 0, "issues": ["file_not_found"], "details": {}}
+
+    # Strip frontmatter
+    body = content
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end > 0:
+            body = content[end + 3:]
+
+    lines = body.strip().split("\n")
+    score = 100
+    issues = []
+    details: dict = {}
+
+    # 1. Contradiction detection (30 pts)
+    # Find "always/never/must/must not" pairs on overlapping topics
+    always_patterns = re.findall(r"(?i)\b(always|must)\s+(\w+(?:\s+\w+)?)", body)
+    never_patterns = re.findall(r"(?i)\b(never|must not|do not|don't)\s+(\w+(?:\s+\w+)?)", body)
+
+    always_topics = {topic.lower().strip() for _, topic in always_patterns}
+    never_topics = {topic.lower().strip() for _, topic in never_patterns}
+    contradictions = always_topics & never_topics
+
+    if contradictions:
+        penalty = min(30, len(contradictions) * 10)
+        score -= penalty
+        issues.append(f"contradictions:{len(contradictions)}")
+        details["contradictions"] = sorted(contradictions)
+    details["always_count"] = len(always_patterns)
+    details["never_count"] = len(never_patterns)
+
+    # 2. Vague reference detection (25 pts)
+    # "the file", "the script", "the output" without clear antecedent in preceding 3 lines
+    vague_refs = []
+    vague_pattern = re.compile(r"\b(the\s+(?:file|script|output|result|command|path|tool|config))\b", re.IGNORECASE)
+    for i, line in enumerate(lines):
+        matches = vague_pattern.findall(line)
+        for match in matches:
+            # Check preceding 3 lines for a specific file/path reference
+            context = "\n".join(lines[max(0, i - 3):i])
+            # If no specific path, filename, or backtick-quoted reference nearby, it's vague
+            if not re.search(r"(`[^`]+`|[\w/]+\.\w+|/[\w/]+)", context):
+                vague_refs.append(f"line {i + 1}: {match}")
+
+    if vague_refs:
+        penalty = min(25, len(vague_refs) * 5)
+        score -= penalty
+        issues.append(f"vague_references:{len(vague_refs)}")
+    details["vague_references"] = len(vague_refs)
+
+    # 3. Ambiguous pronoun detection (20 pts)
+    # Sentences starting with "It ", "This ", "That " without clear referent
+    ambiguous_pronouns = []
+    pronoun_pattern = re.compile(r"^\s*(It|This|That)\s+(is|does|will|can|should|has|was|means)\b")
+    for i, line in enumerate(lines):
+        if pronoun_pattern.match(line):
+            # Check if preceding line provides a clear subject
+            if i > 0:
+                prev = lines[i - 1].strip()
+                # If previous line is empty or a header, the pronoun is ambiguous
+                if not prev or prev.startswith("#"):
+                    ambiguous_pronouns.append(f"line {i + 1}")
+
+    if ambiguous_pronouns:
+        penalty = min(20, len(ambiguous_pronouns) * 5)
+        score -= penalty
+        issues.append(f"ambiguous_pronouns:{len(ambiguous_pronouns)}")
+    details["ambiguous_pronouns"] = len(ambiguous_pronouns)
+
+    # 4. Instruction completeness (25 pts)
+    # Every "Run X" / "Execute X" should have a concrete command or path
+    incomplete_instructions = []
+    run_pattern = re.compile(r"^\s*(?:\d+\.\s*)?(?:Run|Execute|Install|Configure)\s+(.+)", re.IGNORECASE)
+    for i, line in enumerate(lines):
+        m = run_pattern.match(line)
+        if m:
+            rest = m.group(1).strip()
+            # Check if there's a backtick command, a path, or a code block nearby
+            has_concrete = bool(re.search(r"(`[^`]+`|[\w/.-]+\.\w+|/[\w/]+)", rest))
+            # Also check next line for a code block
+            if not has_concrete and i + 1 < len(lines):
+                has_concrete = lines[i + 1].strip().startswith("```")
+            if not has_concrete:
+                incomplete_instructions.append(f"line {i + 1}: {line.strip()[:60]}")
+
+    if incomplete_instructions:
+        penalty = min(25, len(incomplete_instructions) * 8)
+        score -= penalty
+        issues.append(f"incomplete_instructions:{len(incomplete_instructions)}")
+    details["incomplete_instructions"] = len(incomplete_instructions)
+
+    return {
+        "score": max(0, score),
+        "issues": issues,
+        "details": details,
     }
 
 
@@ -1044,6 +1163,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--diff", action="store_true", help="Include diff analysis")
     parser.add_argument("--diff-ref", default="HEAD~1", help="Git ref to diff against (default: HEAD~1)")
+    parser.add_argument("--clarity", action="store_true", help="Include clarity dimension (zero weight by default)")
     args = parser.parse_args()
 
     eval_suite = None
@@ -1064,6 +1184,10 @@ def main():
         "efficiency": score_efficiency(args.skill_path),
         "composability": score_composability(args.skill_path),
     }
+
+    # Clarity dimension (opt-in, zero default weight)
+    if args.clarity:
+        scores["clarity"] = score_clarity(args.skill_path)
 
     composite_result = compute_composite(scores)
 
