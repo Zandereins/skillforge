@@ -316,6 +316,16 @@
           "type": "excludes",
           "value": "TODO",
           "description": "No placeholder text in output"
+        },
+        {
+          "type": "response_contains",
+          "value": "score",
+          "description": "Runtime: response mentions scoring"
+        },
+        {
+          "type": "response_excludes",
+          "value": "I cannot",
+          "description": "Runtime: does not refuse the task"
         }
       ]
     },
@@ -370,6 +380,11 @@
           "type": "excludes",
           "value": "error",
           "description": "No error messages in output"
+        },
+        {
+          "type": "response_matches",
+          "value": "(?i)(structure|trigger|efficiency|composability)",
+          "description": "Runtime: response names specific dimensions"
         }
       ]
     },

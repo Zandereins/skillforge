@@ -92,8 +92,10 @@ Use constraints to prevent dimension degradation during optimization.
 | **Edge coverage** | Edge-case test pass rate | Malformed input, corner cases | ≥ 80% |
 | **Token efficiency** | Instruction density (words per feature) | `scripts/score-skill.py` | ≤ target |
 | **Composability** | Cross-skill conflict tests | Run with other skills | 0 conflicts |
+| **Clarity** *(opt-in)* | Contradiction + ambiguity score | `score-skill.py --clarity` | ≥ 80% |
 
-Validate scores against real behavior: run the skill on test prompts and check output.
+Validate scores against real behavior: use `scripts/runtime-evaluator.py` to invoke Claude
+with test prompts and check actual output against assertions.
 See `references/metrics-catalog.md` for detailed rubrics and custom metric setup.
 
 ## Custom Metrics
@@ -185,23 +187,14 @@ For iterations where multiple plausible changes exist:
 Use parallel mode when stuck (5+ sequential discards) or when the gap-to-target
 is large (>15 points). Explores 3x more search space per iteration.
 
-## Noisy Metric Handling
+## Noisy Metric + Interaction Effects
 
-When metrics fluctuate (±5%), use multi-run averaging:
-1. Run VERIFY 3 times per iteration. Use the median score.
-2. Keep only if improvement > 2 * noise floor.
-3. Detect noise floor from the first 3 baseline runs.
+When metrics fluctuate (±5%): run VERIFY 3 times, use median, keep only if
+improvement > 2 * noise floor (detected from first 3 baseline runs).
 
-## Interaction Effect Detection
-
-Individual keeps can interact badly. Guard against composite degradation:
-1. Every 5 iterations, compare composite against the score from 5 iterations ago.
-2. If composite dropped > 2 points over the window despite individual keeps passing,
-   review ALL kept changes in the window for pairwise contradictions.
-3. Revert to the best-in-window checkpoint. Re-apply only non-conflicting keeps.
-
-Use this to catch cases where adding edge case A (+0.5) and edge case B (+0.3)
-creates contradictory instructions that degrade the composite by -3 over 10 iterations.
+Guard against interaction effects: every 5 iterations, compare composite against
+5 iterations ago. If composite dropped > 2 points despite individual keeps, revert
+to best-in-window checkpoint and re-apply only non-conflicting keeps.
 
 ## Cost Tracking + ROI
 
@@ -265,10 +258,11 @@ Create new skills with `skill-creator`. For crashing skills, suggest using
 ## Files
 
 Run `ls -R` in the skill directory. Run `python3 scripts/score-skill.py SKILL.md --json` for current scores. Key files:
-- `scripts/score-skill.py` — Run to compute all 6 dimension scores
+- `scripts/score-skill.py` — Compute dimension scores (`--diff` for change analysis, `--clarity` for 7th dimension)
+- `scripts/runtime-evaluator.py` — Invoke Claude with test prompts, check real output
 - `scripts/analyze-skill.sh` — Run for structural lint (100-point check)
-- `scripts/run-eval.sh` — Run eval suite with assertion validation
-- `scripts/progress.py` — Generate convergence charts from `history/results.jsonl`
+- `scripts/run-eval.sh` — Run eval suite (`--runtime` to include runtime evaluation)
+- `scripts/progress.py` — Convergence charts + strategy analysis (`--strategies`)
 - `references/improvement-protocol.md` — Full 9-phase autonomous loop spec
 - `references/metrics-catalog.md` — Scoring rubrics + custom metric setup
 - `templates/eval-suite-template.json` — Eval skeleton for new skills

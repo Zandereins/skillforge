@@ -322,6 +322,49 @@ class ProgressAnalyzer:
             reverse=True,
         )
 
+    def classify_eval_health(self, window: int = 10) -> Dict[str, List[str]]:
+        """Classify eval test cases as mastered, blocked, or flaky.
+
+        Looks at the last `window` kept experiments to determine test health:
+        - mastered: always passes for 10+ iterations (reduce weight)
+        - blocked: always fails (needs investigation)
+        - flaky: inconsistent (unreliable signal)
+        """
+        kept_exps = [e for e in self.experiments if e.get("status") == "keep"][-window:]
+
+        if len(kept_exps) < 3:
+            return {"mastered": [], "blocked": [], "flaky": [], "healthy": []}
+
+        # Collect pass/fail history per test case from pass_rate or binary results
+        # Since we track composite scores, not individual test results,
+        # classify based on score stability per dimension
+        dim_scores: Dict[str, List[float]] = {}
+        for exp in kept_exps:
+            scores = exp.get("scores", {})
+            for dim, val in scores.items():
+                if dim not in dim_scores:
+                    dim_scores[dim] = []
+                dim_scores[dim].append(val)
+
+        result: Dict[str, List[str]] = {"mastered": [], "blocked": [], "flaky": [], "healthy": []}
+
+        for dim, values in dim_scores.items():
+            if not values:
+                continue
+            avg = sum(values) / len(values)
+            variance = sum((v - avg) ** 2 for v in values) / len(values)
+
+            if avg >= 95 and variance < 5:
+                result["mastered"].append(dim)
+            elif avg < 50 and variance < 10:
+                result["blocked"].append(dim)
+            elif variance > 50:
+                result["flaky"].append(dim)
+            else:
+                result["healthy"].append(dim)
+
+        return result
+
     def generate_summary(
         self,
         goal: Optional[float] = None,

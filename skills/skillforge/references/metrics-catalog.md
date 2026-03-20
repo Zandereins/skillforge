@@ -136,6 +136,26 @@ Measures how well the skill plays with others.
 | Explicit handoff points | 20 | References to other skills, "then use X", "suggest using Y" |
 | No conflicting tool assumptions | 20 | No hard tool requirements without fallbacks |
 
+## 7. Clarity (weight: 0.00 default, 0.05 when --clarity)
+
+Measures instruction clarity — contradictions, ambiguity, and completeness.
+Opt-in dimension that doesn't affect the default composite score.
+
+**Automated checks (via `scripts/score-skill.py --clarity`):**
+
+| Check | Points | Criteria |
+|-------|--------|----------|
+| No contradictions | 30 | No "always X" vs "never X" on same topic |
+| No vague references | 25 | "the file" has clear antecedent within 3 lines |
+| No ambiguous pronouns | 20 | Sentences don't start with "It/This/That" after empty lines |
+| Complete instructions | 25 | Every "Run X" has a concrete command or path |
+
+**Score ranges:**
+- 90-100: Crystal clear instructions, no ambiguity
+- 70-89: Minor clarity issues, mostly readable
+- 50-69: Several vague references or ambiguous sections
+- 0-49: Contradictory or incomplete instructions
+
 ## Composite Score Calculation
 
 ```python

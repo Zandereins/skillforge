@@ -17,6 +17,7 @@ set -euo pipefail
 # --- Default config ---
 TIMEOUT=300
 RESULTS_LOG=""
+RUNTIME_EVAL=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_MD=""
 EVAL_SUITE=""
@@ -44,6 +45,10 @@ while [[ $# -gt 0 ]]; do
         --log)
             RESULTS_LOG="$2"
             shift 2
+            ;;
+        --runtime)
+            RUNTIME_EVAL=1
+            shift
             ;;
         -*)
             echo "Error: unknown option $1" >&2
@@ -205,6 +210,25 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
     rm -f "$BINARY_OUTPUT"
 fi
 
+# --- Run runtime evaluator (opt-in) ---
+RUNTIME_RESULTS="{}"
+if [[ $RUNTIME_EVAL -eq 1 ]]; then
+    echo "  Running runtime evaluator..." >&2
+    RUNTIME_OUTPUT=$(mktemp)
+    if python3 "$SCRIPT_DIR/runtime-evaluator.py" "$EVAL_SUITE" \
+        --skill-path "$SKILL_MD" --timeout "$TIMEOUT" --json > "$RUNTIME_OUTPUT" 2>&1; then
+        RUNTIME_RESULTS=$(cat "$RUNTIME_OUTPUT")
+        # Merge runtime assertions into totals
+        RT_PASSED=$(echo "$RUNTIME_RESULTS" | jq -r '.assertions_passed // 0')
+        RT_TOTAL=$(echo "$RUNTIME_RESULTS" | jq -r '.assertions_total // 0')
+        ASSERTIONS_PASSED=$((ASSERTIONS_PASSED + RT_PASSED))
+        ASSERTIONS_TOTAL=$((ASSERTIONS_TOTAL + RT_TOTAL))
+    else
+        echo "  Runtime evaluator failed (non-fatal)" >&2
+    fi
+    rm -f "$RUNTIME_OUTPUT"
+fi
+
 # --- Calculate pass rate ---
 PASS_RATE=0
 if [[ $ASSERTIONS_TOTAL -gt 0 ]]; then
@@ -231,6 +255,7 @@ RESULT_JSON=$(jq -n \
     --argjson composite_score "$COMPOSITE_SCORE" \
     --argjson dimension_scores "$DIMENSION_SCORES" \
     --argjson binary_results "$BINARY_RESULTS" \
+    --argjson runtime_results "$RUNTIME_RESULTS" \
     '{
         "experiment_id": $experiment_id,
         "skill_name": $skill_name,
@@ -243,7 +268,8 @@ RESULT_JSON=$(jq -n \
         },
         "dimension_scores": $dimension_scores,
         "composite_score": $composite_score,
-        "binary_results": $binary_results
+        "binary_results": $binary_results,
+        "runtime_results": $runtime_results
     }')
 
 # --- Append to results log if specified ---
