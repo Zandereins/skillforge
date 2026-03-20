@@ -172,33 +172,47 @@ def _extract_description(content: str) -> str:
 
 # --- Synonym expansion for trigger matching ---
 # Maps common synonyms to canonical terms found in skill descriptions
-SYNONYM_TABLE = {
-    "enhance": "improve", "optimize": "improve", "refine": "improve",
-    "polish": "improve", "boost": "improve", "upgrade": "improve",
-    "fix up": "improve", "tune": "improve", "tweak": "improve",
-    "activate": "trigger", "fire": "trigger", "match": "trigger",
-    "invoke": "trigger", "detect": "trigger",
-    "assess": "audit", "inspect": "audit", "review": "audit",
-    "evaluate": "audit", "examine": "audit", "check": "audit",
-    "test": "eval", "validate": "eval", "verify": "eval",
-    "grind": "iterate", "loop": "iterate", "repeat": "iterate",
-    "verbose": "efficiency", "bloated": "efficiency", "concise": "efficiency",
-    "lean": "efficiency", "trim": "efficiency", "compact": "efficiency",
+# --- Synonym groups for bidirectional expansion ---
+# Each group maps to a canonical term. Both directions are expanded.
+_SYNONYM_GROUPS = {
+    "improve": ["enhance", "optimize", "refine", "polish", "boost", "upgrade", "tune", "tweak"],
+    "trigger": ["activate", "fire", "match", "invoke", "detect"],
+    "audit": ["assess", "inspect", "review", "evaluate", "examine", "check"],
+    "eval": ["test", "validate", "verify"],
+    "iterate": ["grind", "loop", "repeat"],
+    "efficiency": ["verbose", "bloated", "concise", "lean", "trim", "compact"],
 }
 
+# Build bidirectional table: synonym→canonical AND canonical→all-synonyms
+SYNONYM_TABLE = {}
+for canonical, synonyms in _SYNONYM_GROUPS.items():
+    for syn in synonyms:
+        SYNONYM_TABLE[syn] = canonical
+    # Reverse: canonical expands to first synonym (ensures bidirectional matching)
+    SYNONYM_TABLE[canonical] = canonical  # canonical maps to itself for uniform handling
 
-def _tokenize_meaningful(text: str) -> list[str]:
-    """Extract meaningful words (4+ chars, not stopwords), with synonym expansion."""
+
+def _tokenize_meaningful(text: str, expand_reverse: bool = False) -> list[str]:
+    """Extract meaningful words (4+ chars, not stopwords), with synonym expansion.
+
+    expand_reverse=True: also expand canonical→all-synonyms (use for descriptions only).
+    expand_reverse=False: only expand synonym→canonical (use for prompts).
+    """
     words = re.findall(r"\b[a-z]{4,}\b", text.lower())
     result = []
     for w in words:
         if w in STOPWORDS:
             continue
-        # Expand synonyms: add both the original and canonical form
-        canonical = SYNONYM_TABLE.get(w)
         result.append(w)
-        if canonical and canonical not in result:
+        # Forward: synonym → canonical (always)
+        canonical = SYNONYM_TABLE.get(w)
+        if canonical and canonical != w and canonical not in result:
             result.append(canonical)
+        # Reverse: canonical → all synonyms (only for descriptions)
+        if expand_reverse and w in _SYNONYM_GROUPS:
+            for syn in _SYNONYM_GROUPS[w]:
+                if syn not in result:
+                    result.append(syn)
     return result
 
 
@@ -270,7 +284,7 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
         negative_terms.update(_tokenize_meaningful(pat))
 
     # Meaningful description terms (excluding negated ones for positive matching)
-    desc_terms = _tokenize_meaningful(desc_lower)
+    desc_terms = _tokenize_meaningful(desc_lower, expand_reverse=True)
     desc_term_set = set(desc_terms)
     positive_desc_terms = desc_term_set - negative_terms
 

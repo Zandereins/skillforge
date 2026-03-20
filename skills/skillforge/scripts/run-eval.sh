@@ -103,7 +103,7 @@ fi
 echo "$EXPERIMENT_ID" > "$COUNTER_FILE"
 
 # --- Run Python scorer (6 dimensions) ---
-DIMENSION_SCORES=""
+DIMENSION_SCORES="{}"
 COMPOSITE_SCORE=0
 SCORER_FAILED=0
 
@@ -157,7 +157,7 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
                 # Evaluate assertion against skill content (static check)
                 # For runtime assertions, the caller must provide output files
                 assertion_passed="false"
-                skill_content=$(cat "$SKILL_PATH" 2>/dev/null || echo "")
+                skill_content=$(cat "$SKILL_MD" 2>/dev/null || echo "")
 
                 case "$assertion_type" in
                     contains)
