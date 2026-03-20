@@ -1041,12 +1041,20 @@ def score_clarity(skill_path: str) -> dict:
 
     # 4. Instruction completeness (25 pts)
     # Every "Run X" / "Execute X" should have a concrete command or path
+    # Skip conceptual uses like "Run eval evolution BETWEEN sessions"
     incomplete_instructions = []
     run_pattern = re.compile(r"^\s*(?:\d+\.\s*)?(?:Run|Execute|Install|Configure)\s+(.+)", re.IGNORECASE)
+    # Conceptual continuations that aren't shell commands
+    conceptual_pattern = re.compile(
+        r"(?i)(baseline|all\s+\d+|VERIFY|evolution|the\s+\w+\s+(?:on|for|to|with|against))",
+    )
     for i, line in enumerate(lines):
         m = run_pattern.match(line)
         if m:
             rest = m.group(1).strip()
+            # Skip conceptual instructions (not meant as shell commands)
+            if conceptual_pattern.search(rest):
+                continue
             # Check if there's a backtick command, a path, or a code block nearby
             has_concrete = bool(re.search(r"(`[^`]+`|[\w/.-]+\.\w+|/[\w/]+)", rest))
             # Also check next line for a code block
