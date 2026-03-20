@@ -308,14 +308,19 @@
           "description": "Report includes trigger analysis"
         },
         {
-          "type": "pattern",
-          "value": "\\d+/100",
-          "description": "Report shows a numeric score"
+          "type": "contains",
+          "value": "score-skill.py",
+          "description": "SKILL.md references the scoring script"
         },
         {
           "type": "excludes",
           "value": "TODO",
           "description": "No placeholder text in output"
+        },
+        {
+          "type": "response_matches",
+          "value": "\\d+/100",
+          "description": "Runtime: report shows a numeric score"
         },
         {
           "type": "response_contains",
@@ -377,9 +382,14 @@
           "description": "Contains numeric scores"
         },
         {
-          "type": "excludes",
+          "type": "contains",
+          "value": "composability",
+          "description": "SKILL.md covers composability dimension"
+        },
+        {
+          "type": "response_excludes",
           "value": "error",
-          "description": "No error messages in output"
+          "description": "Runtime: no error messages in output"
         },
         {
           "type": "response_matches",
@@ -394,19 +404,29 @@
       "input_files": [],
       "assertions": [
         {
-          "type": "pattern",
-          "value": "(?i)(pass|fail)",
-          "description": "Reports pass/fail status for tests"
-        },
-        {
-          "type": "pattern",
-          "value": "\\d+/\\d+",
-          "description": "Shows count of passing vs total"
+          "type": "contains",
+          "value": "run-eval.sh",
+          "description": "SKILL.md references the eval runner"
         },
         {
           "type": "contains",
+          "value": "assertion",
+          "description": "SKILL.md mentions assertions"
+        },
+        {
+          "type": "response_matches",
+          "value": "(?i)(pass|fail)",
+          "description": "Runtime: reports pass/fail status"
+        },
+        {
+          "type": "response_matches",
+          "value": "\\d+/\\d+",
+          "description": "Runtime: shows count of passing vs total"
+        },
+        {
+          "type": "response_contains",
           "value": "trigger",
-          "description": "Covers trigger tests"
+          "description": "Runtime: covers trigger tests"
         }
       ]
     },
