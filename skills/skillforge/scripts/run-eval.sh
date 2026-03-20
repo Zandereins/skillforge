@@ -6,7 +6,7 @@
 # with binary assertions (do the outputs pass validation?).
 #
 # Usage:
-#   run-eval.sh <SKILL.md> <eval-suite.json> [--timeout SECONDS]
+#   run-eval.sh <SKILL.md> <eval-suite.json> [--timeout SECONDS] [--runtime]
 #
 # Outputs JSON with composite results and appends to results log.
 # Exit code: 0 if pass_rate improved, 1 if not.
@@ -21,6 +21,14 @@ RUNTIME_EVAL=0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_MD=""
 EVAL_SUITE=""
+
+# --- Check required tools ---
+for tool in jq python3; do
+    if ! command -v "$tool" &>/dev/null; then
+        echo "Error: required tool '$tool' not found in PATH" >&2
+        exit 1
+    fi
+done
 
 # --- Trap signal handlers ---
 cleanup() {
@@ -70,13 +78,14 @@ done
 
 if [[ -z "$SKILL_MD" ]] || [[ -z "$EVAL_SUITE" ]]; then
     cat >&2 <<'USAGE'
-Usage: run-eval.sh <SKILL.md> <eval-suite.json> [--timeout SECONDS] [--log RESULTS_LOG]
+Usage: run-eval.sh <SKILL.md> <eval-suite.json> [--timeout SECONDS] [--log RESULTS_LOG] [--runtime]
 
 Arguments:
   SKILL_MD           Path to the skill SKILL.md to evaluate
   EVAL_SUITE         Path to eval-suite-*.json containing triggers and test cases
   --timeout SECONDS  Timeout for scoring and assertions (default: 300)
-  --log LOGFILE      TSV/JSONL file to append results to (optional)
+  --log LOGFILE      JSONL file to append results to (optional)
+  --runtime          Run runtime evaluator (invoke claude -p for each test case)
 USAGE
     exit 1
 fi
@@ -114,7 +123,12 @@ SCORER_FAILED=0
 
 echo "  Running Python scorer..." >&2
 SCORE_OUTPUT=$(mktemp)
-timeout "$TIMEOUT" python3 "$SCRIPT_DIR/score-skill.py" "$SKILL_MD" \
+# Use timeout if available (Linux), fall back to direct invocation (macOS)
+TIMEOUT_CMD=""
+if command -v timeout &>/dev/null; then
+    TIMEOUT_CMD="timeout $TIMEOUT"
+fi
+$TIMEOUT_CMD python3 "$SCRIPT_DIR/score-skill.py" "$SKILL_MD" \
     --eval-suite "$EVAL_SUITE" --json > "$SCORE_OUTPUT" 2>&1 || {
     SCORER_FAILED=1
 }
@@ -125,58 +139,65 @@ if [[ $SCORER_FAILED -eq 0 ]]; then
 fi
 rm -f "$SCORE_OUTPUT"
 
-# --- Run binary assertions ---
+# --- Assertion types that are runtime-only (skip in static check) ---
+# These types are handled by runtime-evaluator.py, not the static bash loop.
+RUNTIME_ONLY_TYPES="response_contains|response_matches|response_excludes"
+
+# --- Run binary assertions (static checks against SKILL.md content) ---
 BINARY_RESULTS="[]"
 ASSERTIONS_PASSED=0
 ASSERTIONS_TOTAL=0
 
 if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
     echo "  Running binary assertions..." >&2
-    
+
+    # Read skill content once (not per-assertion)
+    SKILL_CONTENT=$(cat "$SKILL_MD" 2>/dev/null || echo "")
+
     BINARY_OUTPUT=$(mktemp)
     {
         ASSERTIONS_PASSED=0
         ASSERTIONS_TOTAL=0
         BINARY_ARRAY="[]"
-        
+
         # Process each test case
         test_count=$(jq '.test_cases | length' "$EVAL_SUITE")
         for ((i=0; i<test_count; i++)); do
             tc=$(jq ".test_cases[$i]" "$EVAL_SUITE")
             tc_id=$(echo "$tc" | jq -r '.id')
-            prompt=$(echo "$tc" | jq -r '.prompt')
-            
-            # For now, assertions are parsed from test_cases
-            # In production, run the prompt and check assertions
+
             assertions=$(echo "$tc" | jq '.assertions // []')
             assertion_count=$(echo "$assertions" | jq 'length')
-            
+
             for ((j=0; j<assertion_count; j++)); do
                 assertion=$(echo "$assertions" | jq ".[$j]")
                 assertion_type=$(echo "$assertion" | jq -r '.type')
                 assertion_value=$(echo "$assertion" | jq -r '.value')
                 assertion_desc=$(echo "$assertion" | jq -r '.description')
-                
+
+                # Skip runtime-only assertion types in static check
+                if echo "$assertion_type" | grep -qE "^($RUNTIME_ONLY_TYPES)$"; then
+                    continue
+                fi
+
                 ASSERTIONS_TOTAL=$((ASSERTIONS_TOTAL + 1))
-                
+
                 # Evaluate assertion against skill content (static check)
-                # For runtime assertions, the caller must provide output files
                 assertion_passed="false"
-                skill_content=$(cat "$SKILL_MD" 2>/dev/null || echo "")
 
                 case "$assertion_type" in
                     contains)
-                        if echo "$skill_content" | grep -qi "$assertion_value" 2>/dev/null; then
+                        if echo "$SKILL_CONTENT" | grep -qiF -- "$assertion_value" 2>/dev/null; then
                             assertion_passed="true"
                         fi
                         ;;
                     excludes)
-                        if ! echo "$skill_content" | grep -qi "$assertion_value" 2>/dev/null; then
+                        if ! echo "$SKILL_CONTENT" | grep -qiF -- "$assertion_value" 2>/dev/null; then
                             assertion_passed="true"
                         fi
                         ;;
                     pattern)
-                        if echo "$skill_content" | grep -qiE "$assertion_value" 2>/dev/null; then
+                        if echo "$SKILL_CONTENT" | grep -qiE -- "$assertion_value" 2>/dev/null; then
                             assertion_passed="true"
                         fi
                         ;;
@@ -198,15 +219,15 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
                     '. += [{"test_case": $tc_id, "type": $type, "description": $desc, "passed": $passed}]')
             done
         done
-        
+
         # Output results
         echo "$BINARY_ARRAY" | jq .
     } > "$BINARY_OUTPUT"
-    
+
     BINARY_RESULTS=$(cat "$BINARY_OUTPUT")
     ASSERTIONS_PASSED=$(echo "$BINARY_RESULTS" | jq '[.[] | select(.passed == true)] | length')
     ASSERTIONS_TOTAL=$(echo "$BINARY_RESULTS" | jq 'length')
-    
+
     rm -f "$BINARY_OUTPUT"
 fi
 
@@ -216,7 +237,7 @@ if [[ $RUNTIME_EVAL -eq 1 ]]; then
     echo "  Running runtime evaluator..." >&2
     RUNTIME_OUTPUT=$(mktemp)
     if python3 "$SCRIPT_DIR/runtime-evaluator.py" "$EVAL_SUITE" \
-        --skill-path "$SKILL_MD" --timeout "$TIMEOUT" --json > "$RUNTIME_OUTPUT" 2>&1; then
+        --skill-path "$SKILL_MD" --timeout "$TIMEOUT" --json > "$RUNTIME_OUTPUT" 2>/dev/null; then
         RUNTIME_RESULTS=$(cat "$RUNTIME_OUTPUT")
         # Merge runtime assertions into totals
         RT_PASSED=$(echo "$RUNTIME_RESULTS" | jq -r '.assertions_passed // 0')
@@ -224,6 +245,7 @@ if [[ $RUNTIME_EVAL -eq 1 ]]; then
         ASSERTIONS_PASSED=$((ASSERTIONS_PASSED + RT_PASSED))
         ASSERTIONS_TOTAL=$((ASSERTIONS_TOTAL + RT_TOTAL))
     else
+        RUNTIME_RESULTS='{"error": "runtime evaluator failed", "skipped": true}'
         echo "  Runtime evaluator failed (non-fatal)" >&2
     fi
     rm -f "$RUNTIME_OUTPUT"
@@ -239,7 +261,7 @@ fi
 PREVIOUS_PASS_RATE=0
 if [[ -n "$RESULTS_LOG" ]] && [[ -f "$RESULTS_LOG" ]]; then
     PREVIOUS_PASS_RATE=$(tail -1 "$RESULTS_LOG" | \
-        awk -F'\t' '{print $3}' 2>/dev/null || echo "0")
+        jq -r '.pass_rate // 0' 2>/dev/null || echo "0")
 fi
 
 # --- Build JSON output ---
@@ -273,12 +295,35 @@ RESULT_JSON=$(jq -n \
     }')
 
 # --- Append to results log if specified ---
+# Schema aligned with progress.py expectations
 if [[ -n "$RESULTS_LOG" ]]; then
     mkdir -p "$(dirname "$RESULTS_LOG")"
-    
-    # JSONL format: one JSON object per line (compatible with progress.py)
-    printf '{"experiment_id":"%s","skill_name":"%s","pass_rate":%s,"composite_score":%s,"timestamp":"%s"}\n' \
-        "$EXPERIMENT_ID" "$SKILL_NAME" "$PASS_RATE" "${COMPOSITE_SCORE:-0}" "$TIMESTAMP" >> "$RESULTS_LOG"
+
+    # JSONL format compatible with progress.py ProgressAnalyzer
+    jq -n -c \
+        --argjson exp "$EXPERIMENT_ID" \
+        --arg timestamp "$TIMESTAMP" \
+        --arg commit "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+        --argjson scores "$DIMENSION_SCORES" \
+        --arg pass_rate "${ASSERTIONS_PASSED}/${ASSERTIONS_TOTAL}" \
+        --argjson composite "$COMPOSITE_SCORE" \
+        --argjson delta 0 \
+        --arg status "pending" \
+        --arg description "" \
+        --argjson duration_ms 0 \
+        '{
+            "exp": $exp,
+            "timestamp": $timestamp,
+            "commit": $commit,
+            "scores": $scores,
+            "pass_rate": $pass_rate,
+            "composite": $composite,
+            "delta": $delta,
+            "status": $status,
+            "strategy_type": null,
+            "description": $description,
+            "duration_ms": $duration_ms
+        }' >> "$RESULTS_LOG"
 fi
 
 # --- Output JSON result ---

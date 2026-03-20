@@ -342,6 +342,8 @@ class ProgressAnalyzer:
         for exp in kept_exps:
             scores = exp.get("scores", {})
             for dim, val in scores.items():
+                if not isinstance(val, (int, float)) or val < 0:
+                    continue  # skip unmeasured sentinel (-1)
                 if dim not in dim_scores:
                     dim_scores[dim] = []
                 dim_scores[dim].append(val)
@@ -423,13 +425,18 @@ class ProgressAnalyzer:
                 "estimated_iterations": est,
             }
 
-        # Strategy meta-learning (opt-in via --strategies)
+        # Strategy meta-learning
         strategy_stats = self.compute_strategy_stats()
         if strategy_stats:
             summary["strategies"] = {
                 "stats": strategy_stats,
                 "recommended_order": self.get_recommended_strategy_order(),
             }
+
+        # Eval health classification
+        eval_health = self.classify_eval_health()
+        if any(eval_health.values()):
+            summary["eval_health"] = eval_health
 
         return summary
 

@@ -965,15 +965,25 @@ def score_clarity(skill_path: str) -> dict:
         if end > 0:
             body = content[end + 3:]
 
-    lines = body.strip().split("\n")
+    # Strip code blocks before clarity analysis (avoid false positives
+    # from "always"/"never" inside code examples)
+    prose_body = re.sub(r"```[\s\S]*?```", "", body)
+
+    lines = prose_body.strip().split("\n")
+
+    # Empty body check
+    if not prose_body.strip():
+        return {"score": 0, "issues": ["empty_skill_body"], "details": {}}
+
     score = 100
     issues = []
     details: dict = {}
 
     # 1. Contradiction detection (30 pts)
     # Find "always/never/must/must not" pairs on overlapping topics
-    always_patterns = re.findall(r"(?i)\b(always|must)\s+(\w+(?:\s+\w+)?)", body)
-    never_patterns = re.findall(r"(?i)\b(never|must not|do not|don't)\s+(\w+(?:\s+\w+)?)", body)
+    # Compare first verb only to catch "always run X" vs "never run Y"
+    always_patterns = re.findall(r"(?i)\b(always|must)\s+(\w+(?:\s+\w+)?)", prose_body)
+    never_patterns = re.findall(r"(?i)\b(never|must not|do not|don't)\s+(\w+(?:\s+\w+)?)", prose_body)
 
     always_topics = {topic.lower().strip() for _, topic in always_patterns}
     never_topics = {topic.lower().strip() for _, topic in never_patterns}
@@ -1063,10 +1073,12 @@ def score_diff(skill_path: str, diff_ref: str = "HEAD~1") -> dict:
     try:
         result = subprocess.run(
             ["git", "diff", diff_ref, "--", skill_path],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10, errors="replace"
         )
-        if result.returncode != 0 or not result.stdout.strip():
-            return {"available": False, "reason": "no diff or not in git repo"}
+        if result.returncode != 0:
+            return {"available": False, "reason": "git diff failed (invalid ref or not in git repo)"}
+        if not result.stdout.strip():
+            return {"available": False, "reason": "no changes between refs"}
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return {"available": False, "reason": "git not available"}
 
@@ -1095,7 +1107,7 @@ def score_diff(skill_path: str, diff_ref: str = "HEAD~1") -> dict:
     def classify_lines(lines: list[str]) -> dict:
         signals = sum(1 for l in lines if signal_pattern.search(l) or example_pattern.search(l))
         noise = sum(1 for l in lines if noise_pattern.search(l))
-        neutral = len(lines) - signals - noise
+        neutral = max(0, len(lines) - signals - noise)
         return {"signal": signals, "noise": noise, "neutral": neutral, "total": len(lines)}
 
     added = classify_lines(added_lines)
