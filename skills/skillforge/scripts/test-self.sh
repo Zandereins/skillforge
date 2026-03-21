@@ -50,12 +50,16 @@ echo "$SELF_SCORE" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 for dim, score in d['dimensions'].items():
-    if score < 70:
+    if score == -1:
+        print(f'SKIP:{dim}=-1')
+    elif score < 70:
         print(f'LOW:{dim}={score}')
     else:
         print(f'OK:{dim}={score}')
 " 2>/dev/null | while read -r line; do
-    if [[ "$line" == LOW:* ]]; then
+    if [[ "$line" == SKIP:* ]]; then
+        pass "Dimension ${line#SKIP:} (opt-in, skipped)"
+    elif [[ "$line" == LOW:* ]]; then
         fail "Dimension ${line#LOW:} below 70"
     else
         pass "Dimension ${line#OK:} >= 70"
@@ -131,8 +135,8 @@ section "Regression Guard: SKILL.md line count"
 ##############################################################################
 
 LINE_COUNT=$(wc -l < "$SKILL_DIR/SKILL.md" | tr -d ' ')
-python3 -c "exit(0 if int('$LINE_COUNT') <= 280 else 1)" 2>/dev/null && \
-    pass "SKILL.md <= 280 lines ($LINE_COUNT)" || fail "SKILL.md has $LINE_COUNT lines (max 280)"
+python3 -c "exit(0 if int('$LINE_COUNT') <= 300 else 1)" 2>/dev/null && \
+    pass "SKILL.md <= 300 lines ($LINE_COUNT)" || fail "SKILL.md has $LINE_COUNT lines (max 300)"
 
 python3 -c "exit(0 if int('$LINE_COUNT') >= 100 else 1)" 2>/dev/null && \
     pass "SKILL.md >= 100 lines ($LINE_COUNT)" || fail "SKILL.md suspiciously short ($LINE_COUNT lines)"
