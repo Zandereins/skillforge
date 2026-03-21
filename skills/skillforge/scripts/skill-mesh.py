@@ -188,12 +188,15 @@ def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
 
 # --- Broken Handoff Detection ---
 
-def _levenshtein_distance(s1: str, s2: str) -> int:
-    """Simple Levenshtein distance for fuzzy matching."""
+def _levenshtein_distance(s1: str, s2: str, threshold: int = 2) -> int:
+    """Simple Levenshtein distance for fuzzy matching with early exit."""
     if len(s1) < len(s2):
-        return _levenshtein_distance(s2, s1)
+        return _levenshtein_distance(s2, s1, threshold)
     if len(s2) == 0:
         return len(s1)
+    # Length pruning: if length difference exceeds threshold, skip computation
+    if abs(len(s1) - len(s2)) > threshold:
+        return abs(len(s1) - len(s2))
 
     prev_row = list(range(len(s2) + 1))
     for i, c1 in enumerate(s1):
@@ -223,17 +226,34 @@ def detect_broken_handoffs(skills: list[dict]) -> list[dict]:
         # And underscore variant
         name_table[slug.replace("-", "_")] = skill
 
-    # Handoff patterns
+    # Handoff patterns — only match structural skill references, not prose
+    # Bare "use" is excluded to prevent matching every English sentence.
+    # "use" only matches when followed by a quoted/backtick-delimited name.
     handoff_pattern = re.compile(
-        r"(?:use|hand\s*off\s*to|then\s+use|pass\s+to|chain\s+with|"
-        r"followed\s+by|after\s+.*use|before\s+.*use|instead\s+use|"
-        r"suggest\s+using|complementary\s+.*skill|works\s+with)\s+"
+        r"(?:"
+        # Strong handoff verbs — almost always real skill references
+        r"hand\s*off\s*to|pass\s+to|chain\s+with|followed\s+by"
+        r"|then\s+use|instead\s+use|suggest\s+using"
+        r"|complementary\s+\w+\s+skill|works\s+with"
+        # "use" only when the name is backtick/quote-wrapped
+        r"|use\s+[`'\"]"
+        # "after/before <word> use" — anchored, no greedy wildcard
+        r"|after\s+\w+\s+use|before\s+\w+\s+use"
+        r")\s*"
         r"[`'\"]?([a-zA-Z][a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)[`'\"]?",
         re.IGNORECASE
     )
 
     # Also match /slash-command references
     slash_pattern = re.compile(r"/([a-zA-Z][a-zA-Z0-9_-]+(?::[a-zA-Z0-9_-]+)?)")
+
+    # Common words that aren't skill names — defined once, not per-skill
+    _false_positives = {
+        "this", "that", "the", "a", "an", "it", "your", "my",
+        "another", "other", "same", "different", "each", "all",
+        "first", "next", "last", "new", "old", "any", "every",
+        "results", "history", "data", "mode",
+    }
 
     issues = []
 
@@ -242,15 +262,6 @@ def detect_broken_handoffs(skills: list[dict]) -> list[dict]:
 
         # Find handoff references
         refs = set()
-        # Common words that aren't skill names
-        _false_positives = {
-            "this", "that", "the", "a", "an", "it", "your", "my",
-            "constraints to", "results", "history", "data", "mode",
-            "another", "other", "same", "different", "each", "all",
-            "first", "next", "last", "new", "old", "any", "every",
-            "for brand-new", "discovery mode", "parallel mode",
-            "sequential mode", "analyze-skill", "current best",
-        }
         for match in handoff_pattern.finditer(content):
             ref = match.group(1).strip().lower()
             if ref in _false_positives:
@@ -711,7 +722,7 @@ def main():
     parser = argparse.ArgumentParser(description="SkillForge Skill Mesh Analyzer")
     parser.add_argument("--skill-dirs", nargs="+", default=[], help="Directories to scan for SKILL.md files")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--incremental", action="store_true", help="(Planned) Use cached tokens — not yet implemented")
+    parser.add_argument("--incremental", action="store_true", help="Use content-hash cache to skip recomputation for unchanged skills")
     parser.add_argument("--severity", choices=["info", "warning", "critical"], default=None,
                         help="Minimum severity to report")
     args = parser.parse_args()

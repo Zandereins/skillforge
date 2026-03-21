@@ -963,12 +963,12 @@ def score_runtime(skill_path: str, eval_suite: Optional[dict] = None,
         if not prompt:
             continue
 
-        # Invoke claude with the skill as system context
+        # Invoke claude with the skill content prepended to the prompt
         try:
+            full_prompt = f"[SKILL CONTEXT]\n{content}\n\n[USER REQUEST]\n{prompt}"
             result = subprocess.run(
-                ["claude", "-p", prompt, "--no-input"],
+                ["claude", "-p", full_prompt, "--no-input"],
                 capture_output=True, text=True, timeout=60, errors="replace",
-                env={**os.environ, "CLAUDE_SKILL_CONTEXT": content}
             )
             response = result.stdout.strip()
         except (subprocess.TimeoutExpired, FileNotFoundError):

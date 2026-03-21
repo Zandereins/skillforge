@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -59,7 +60,6 @@ def generate_dashboard(
     # Extract skill name
     try:
         content = scorer._read_skill_safe(skill_path)
-        import re
         name_match = re.search(r"^name:\s*(.+?)$", content, re.MULTILINE)
         if name_match:
             skill_name = name_match.group(1).strip()
@@ -70,7 +70,10 @@ def generate_dashboard(
     eval_suite = None
     auto_eval = skill_dir / "eval-suite.json"
     if auto_eval.exists():
-        eval_suite = json.loads(auto_eval.read_text())
+        try:
+            eval_suite = json.loads(auto_eval.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"Warning: failed to parse eval-suite.json: {e}", file=sys.stderr)
 
     scores = {
         "structure": scorer.score_structure(skill_path),
@@ -95,6 +98,7 @@ def generate_dashboard(
     mesh_result = mesh_analyzer.run_mesh_analysis(
         skill_dirs=skill_dirs or [],
         severity_filter=None,
+        incremental=True,
     )
     mesh_issues = [
         i for i in mesh_result.get("issues", [])
