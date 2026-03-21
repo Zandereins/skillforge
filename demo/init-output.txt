@@ -1,0 +1,22 @@
+Computing baseline score...  done [0.1s]
+SkillForge Init: skillforge
+================================
+
+Generated eval-suite.json:
+  Triggers:    8 positive + 5 negative + 3 edge = 16 total
+  Test cases:  3 (7 assertions)
+  Edge cases:  2 (2 assertions)
+
+Baseline Score: 100/100  [S]
+
+  structure       ██████████  100/100
+  triggers        ██████████  100/100
+  quality         ██████████  100/100
+  edges           ██████████  100/100
+  efficiency      █████████░  93/100
+  composability   ██████████  100/100
+  runtime                     n/a
+
+(dry-run: eval-suite.json was NOT written)
+
+Strong baseline! Run /skillforge:auto for final polish.

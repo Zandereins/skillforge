@@ -1,0 +1,30 @@
+======================================================================
+  SkillForge Health Dashboard: skillforge
+======================================================================
+
+  Composite: ████████████████████  99.9/100  [S]
+    [7/8 dimensions, 91% coverage]
+
+  Dimensions:
+    structure       ██████████  100/100
+    triggers        ██████████  100/100
+    quality         ██████████  100/100
+    edges           ██████████  100/100
+    efficiency      █████████░  93/100
+    composability   ██████████  100/100
+    clarity         ██████████  100/100
+
+  Mesh Issues (4):
+    [WARNING] Broken ref: 'scripts'
+    [WARNING] Broken ref: 'community'
+    [WARNING] Broken ref: 'systematic-debugging'
+    [WARNING] Broken ref: 'progress'
+
+  Untriaged Failures: 77
+    - assertion_failed: 77
+  Run /skillforge:triage to investigate.
+
+  Achievements: ████░░░░░░  4/10
+  ⚡ 🎯 💎 🟢
+
+======================================================================

@@ -1352,6 +1352,319 @@ else
     fail "parallel-runner dry-run" "output is not valid JSON or script crashed"
 fi
 
+echo ""
+echo "=== 17. Init & Report Tests ==="
+
+# 17.1 init-skill.py on own SKILL.md (dry-run, JSON)
+_INIT_RESULT=$(python3 "$SCRIPT_DIR/init-skill.py" "$SKILL_DIR/SKILL.md" --dry-run --json 2>/dev/null)
+if echo "$_INIT_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['skill_name']=='skillforge'; assert d['triggers']['positive']>=5" 2>/dev/null; then
+    pass "init-skill.py: generates valid eval-suite for own SKILL.md (dry-run)"
+else
+    fail "init-skill.py own SKILL.md" "invalid JSON or wrong skill_name"
+fi
+
+# 17.2 init-skill.py nonexistent file
+python3 "$SCRIPT_DIR/init-skill.py" /nonexistent/SKILL.md --json 2>/dev/null
+if [[ $? -eq 1 ]]; then
+    pass "init-skill.py: nonexistent file → exit 1"
+else
+    fail "init-skill.py nonexistent" "expected exit 1"
+fi
+
+# 17.3 init-skill.py --dry-run does not write file
+_INIT_TMP="$TMPDIR_BASE/init-dryrun-test"
+mkdir -p "$_INIT_TMP"
+echo -e "---\nname: dryrun-test\ndescription: A test skill\n---\nContent here" > "$_INIT_TMP/SKILL.md"
+python3 "$SCRIPT_DIR/init-skill.py" "$_INIT_TMP/SKILL.md" --dry-run --json > /dev/null 2>&1
+if [[ ! -f "$_INIT_TMP/eval-suite.json" ]]; then
+    pass "init-skill.py: --dry-run does NOT write eval-suite.json"
+else
+    fail "init-skill.py dry-run" "file was written despite --dry-run"
+fi
+
+# 17.4 init-skill.py: positive triggers >= 5
+_POS_COUNT=$(echo "$_INIT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['triggers']['positive'])" 2>/dev/null)
+if [[ "$_POS_COUNT" -ge 5 ]] 2>/dev/null; then
+    pass "init-skill.py: positive triggers >= 5 (got $_POS_COUNT)"
+else
+    fail "init-skill.py positive triggers" "got $_POS_COUNT, expected >= 5"
+fi
+
+# 17.5 init-skill.py: negative triggers >= 3
+_NEG_COUNT=$(echo "$_INIT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['triggers']['negative'])" 2>/dev/null)
+if [[ "$_NEG_COUNT" -ge 3 ]] 2>/dev/null; then
+    pass "init-skill.py: negative triggers >= 3 (got $_NEG_COUNT)"
+else
+    fail "init-skill.py negative triggers" "got $_NEG_COUNT, expected >= 3"
+fi
+
+# 17.6 init-skill.py writes eval-suite.json (non-dry-run)
+_INIT_WRITE="$TMPDIR_BASE/init-write-test"
+mkdir -p "$_INIT_WRITE"
+echo -e "---\nname: write-test\ndescription: Testing write behavior\n---\nSome skill content" > "$_INIT_WRITE/SKILL.md"
+python3 "$SCRIPT_DIR/init-skill.py" "$_INIT_WRITE/SKILL.md" --json > /dev/null 2>&1
+if [[ -f "$_INIT_WRITE/eval-suite.json" ]]; then
+    # Validate it's valid JSON with required keys
+    if python3 -c "import json; d=json.load(open('$_INIT_WRITE/eval-suite.json')); assert 'triggers' in d" 2>/dev/null; then
+        pass "init-skill.py: writes valid eval-suite.json"
+    else
+        fail "init-skill.py write" "file written but invalid JSON"
+    fi
+else
+    fail "init-skill.py write" "eval-suite.json was not created"
+fi
+
+# 17.7 generate-report.py with synthetic JSONL
+cat > "$TMPDIR_BASE/report-test.jsonl" << 'EOFJSONL'
+{"exp":1,"scores":{"structure":65},"composite":65,"pass_rate":"3/5","delta":0,"status":"baseline","description":"baseline"}
+{"exp":2,"scores":{"structure":75},"composite":75,"pass_rate":"4/5","delta":10,"status":"keep","description":"added examples"}
+EOFJSONL
+_REPORT=$(python3 "$SCRIPT_DIR/generate-report.py" "$TMPDIR_BASE/report-test.jsonl" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+if echo "$_REPORT" | grep -q "# SkillForge Report"; then
+    pass "generate-report.py: markdown starts with '# SkillForge Report'"
+else
+    fail "generate-report.py" "output missing report header"
+fi
+
+# 17.8 generate-report.py nonexistent SKILL.md
+python3 "$SCRIPT_DIR/generate-report.py" "$TMPDIR_BASE/report-test.jsonl" /nonexistent/SKILL.md 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    pass "generate-report.py: nonexistent SKILL.md → non-zero exit"
+else
+    fail "generate-report.py nonexistent" "expected non-zero exit"
+fi
+
+##############################################################################
+# --- 18. New Features Tests ---
+##############################################################################
+
+section "18. New Features Tests"
+
+# Achievements: produces valid JSON
+ACH_OUT=$(python3 "$SCRIPT_DIR/achievements.py" "$SKILL_DIR/SKILL.md" --json 2>/dev/null)
+if echo "$ACH_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'total_unlocked' in d and 'total_available' in d" 2>/dev/null; then
+    pass "achievements.py: produces valid JSON with expected keys"
+else
+    fail "achievements.py JSON" "missing expected keys"
+fi
+
+# Dashboard: gauge bars present
+DASH_OUT=$(python3 "$SCRIPT_DIR/dashboard.py" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+if echo "$DASH_OUT" | grep -q "█"; then
+    pass "dashboard.py: gauge bars rendered in text output"
+else
+    fail "dashboard.py gauges" "no gauge bars found"
+fi
+
+# Dashboard: achievements section present
+if echo "$DASH_OUT" | grep -q "Achievements:"; then
+    pass "dashboard.py: achievements section present"
+else
+    fail "dashboard.py achievements" "no achievements section"
+fi
+
+# Auto-improve: JSON has elapsed_seconds and sparkline fields
+AI_OUT=$(python3 "$SCRIPT_DIR/auto-improve.py" "$SKILL_DIR/SKILL.md" --dry-run --max-iterations 0 --json 2>/dev/null)
+if echo "$AI_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'elapsed_seconds' in d and 'sparkline' in d" 2>/dev/null; then
+    pass "auto-improve.py: JSON output has elapsed_seconds and sparkline"
+else
+    fail "auto-improve.py JSON fields" "missing elapsed_seconds or sparkline"
+fi
+
+# Auto-improve: compact banner in text mode
+AI_TEXT=$(python3 "$SCRIPT_DIR/auto-improve.py" "$SKILL_DIR/SKILL.md" --dry-run --max-iterations 0 2>&1)
+if echo "$AI_TEXT" | grep -q "SkillForge Auto-Improve Complete"; then
+    pass "auto-improve.py: compact banner rendered"
+else
+    fail "auto-improve.py banner" "compact banner not found"
+fi
+
+# Report: share snippet present
+REPORT_JSONL=$(mktemp)
+echo '{"exp":0,"status":"baseline","composite":50,"scores":{"structure":50}}' > "$REPORT_JSONL"
+echo '{"exp":1,"status":"keep","composite":55,"delta":5,"description":"test"}' >> "$REPORT_JSONL"
+REPORT_OUT=$(python3 "$SCRIPT_DIR/generate-report.py" "$REPORT_JSONL" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+rm -f "$REPORT_JSONL"
+if echo "$REPORT_OUT" | grep -q "Share this result"; then
+    pass "generate-report.py: share snippet present in report"
+else
+    fail "generate-report.py share" "share snippet not found"
+fi
+
+# Achievements: nonexistent SKILL.md → non-zero exit
+python3 "$SCRIPT_DIR/achievements.py" /nonexistent/SKILL.md --json 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    pass "achievements.py: nonexistent SKILL.md → non-zero exit"
+else
+    fail "achievements.py nonexistent" "expected non-zero exit"
+fi
+
+##############################################################################
+section "19. Terminal Art, Grade System, Heatmap"
+##############################################################################
+
+# terminal_art.py: score_to_grade mapping
+GRADE_TESTS=$(python3 -c "
+import sys
+sys.path.insert(0, '$SCRIPT_DIR')
+from terminal_art import score_to_grade, render_heatmap, colored_bar, sparkline, render_banner, render_before_after, render_score_card
+
+passed = 0
+failed = 0
+errors = []
+
+# Grade thresholds
+for score, expected in [(100,'S'),(95,'S'),(94.9,'A'),(85,'A'),(84,'B'),(75,'B'),(74,'C'),(65,'C'),(64,'D'),(50,'D'),(49,'F'),(0,'F')]:
+    g = score_to_grade(score)
+    if g == expected:
+        passed += 1
+    else:
+        failed += 1; errors.append(f'grade({score})={g}, expected {expected}')
+
+# Heatmap: renders with >= 3 iterations
+dims = ['structure', 'triggers']
+iters = [{'dimensions': {'structure': 40, 'triggers': 60}},
+         {'dimensions': {'structure': 60, 'triggers': 75}},
+         {'dimensions': {'structure': 85, 'triggers': 90}}]
+hmap = render_heatmap(dims, iters)
+if '\u2591' in hmap or '\u2592' in hmap or '\u2593' in hmap or '\u2588' in hmap:
+    passed += 1
+else:
+    failed += 1; errors.append(f'heatmap missing block chars')
+
+# Heatmap: empty returns empty string
+if render_heatmap([], []) == '':
+    passed += 1
+else:
+    failed += 1; errors.append('heatmap empty not empty string')
+
+# colored_bar: returns string with block chars
+bar = colored_bar(75.0)
+if '\u2588' in bar:
+    passed += 1
+else:
+    failed += 1; errors.append(f'colored_bar missing blocks')
+
+# sparkline: renders values
+sp = sparkline([10, 50, 90])
+if len(sp) == 3:
+    passed += 1
+else:
+    failed += 1; errors.append(f'sparkline length={len(sp)}')
+
+# render_banner: contains title
+banner = render_banner('Test Title', 'subtitle')
+if 'Test Title' in banner and 'SkillForge' in banner:
+    passed += 1
+else:
+    failed += 1; errors.append(f'banner missing content')
+
+# render_before_after: contains arrow
+ba = render_before_after(40, 80)
+if '\u2192' in ba and '+40' in ba:
+    passed += 1
+else:
+    failed += 1; errors.append(f'before_after: {ba}')
+
+# render_score_card: contains grade and dimensions
+card = render_score_card(85, 'A', {'structure': 90, 'triggers': 80})
+if '[A]' in card and 'structure' in card:
+    passed += 1
+else:
+    failed += 1; errors.append(f'score_card missing grade/dims')
+
+print(f'{passed},{failed}')
+if errors:
+    for e in errors:
+        print(f'  ERR: {e}', file=sys.stderr)
+" 2>&1)
+GRADE_PASSED=$(echo "$GRADE_TESTS" | head -1 | cut -d, -f1)
+GRADE_FAILED=$(echo "$GRADE_TESTS" | head -1 | cut -d, -f2)
+if [[ "$GRADE_FAILED" == "0" ]]; then
+    pass "terminal_art.py: $GRADE_PASSED tests passed (grades, heatmap, bars, sparkline, banner)"
+else
+    fail "terminal_art.py" "$GRADE_PASSED passed, $GRADE_FAILED failed"
+fi
+
+# Dashboard: grade badge present
+DASH_GRADE=$(python3 "$SCRIPT_DIR/dashboard.py" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+if echo "$DASH_GRADE" | grep -qE "\[S\]|\[A\]|\[B\]|\[C\]|\[D\]|\[F\]"; then
+    pass "dashboard.py: grade badge present in output"
+else
+    fail "dashboard.py grade" "no grade badge found"
+fi
+
+# Auto-improve: grade badge in banner
+AI_GRADE=$(python3 "$SCRIPT_DIR/auto-improve.py" "$SKILL_DIR/SKILL.md" --dry-run --max-iterations 0 2>&1)
+if echo "$AI_GRADE" | grep -qE "\[S\]|\[A\]|\[B\]|\[C\]|\[D\]|\[F\]"; then
+    pass "auto-improve.py: grade badge in text output"
+else
+    fail "auto-improve.py grade" "no grade badge found"
+fi
+
+# Report: grade column in score summary
+REPORT_GRADE_JSONL=$(mktemp)
+echo '{"exp":0,"status":"baseline","composite":50,"scores":{"structure":50},"pass_rate":"0/0","delta":0,"description":"baseline"}' > "$REPORT_GRADE_JSONL"
+echo '{"exp":1,"status":"keep","composite":85,"scores":{"structure":85},"delta":35,"description":"improve"}' >> "$REPORT_GRADE_JSONL"
+REPORT_GRADE_OUT=$(python3 "$SCRIPT_DIR/generate-report.py" "$REPORT_GRADE_JSONL" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+rm -f "$REPORT_GRADE_JSONL"
+if echo "$REPORT_GRADE_OUT" | grep -q "| Grade |"; then
+    pass "generate-report.py: Grade column in Score Summary"
+else
+    fail "generate-report.py grade" "Grade column not found"
+fi
+
+# Report: heatmap with >= 3 iterations
+HEATMAP_JSONL=$(mktemp)
+for i in $(seq 0 4); do
+    echo "{\"exp\":$i,\"status\":\"keep\",\"composite\":$((60+i*5)),\"scores\":{\"structure\":$((60+i*5)),\"triggers\":$((55+i*7))},\"pass_rate\":\"0/0\",\"delta\":5,\"description\":\"iter $i\"}" >> "$HEATMAP_JSONL"
+done
+HEATMAP_OUT=$(python3 "$SCRIPT_DIR/generate-report.py" "$HEATMAP_JSONL" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+rm -f "$HEATMAP_JSONL"
+if echo "$HEATMAP_OUT" | grep -q "Dimension Heatmap"; then
+    pass "generate-report.py: Dimension Heatmap section present"
+else
+    fail "generate-report.py heatmap" "Dimension Heatmap not found"
+fi
+
+# Init: auto-discovery finds SKILL.md
+INIT_DISCO=$(cd "$SKILL_DIR" && python3 scripts/init-skill.py --dry-run --json 2>&1)
+if echo "$INIT_DISCO" | grep -q "Found SKILL.md"; then
+    pass "init-skill.py: auto-discovers SKILL.md"
+else
+    fail "init-skill.py auto-discovery" "no discovery message found"
+fi
+
+# Init: grade badge in human output
+INIT_HUMAN=$(python3 "$SCRIPT_DIR/init-skill.py" "$SKILL_DIR/SKILL.md" --dry-run 2>/dev/null)
+if echo "$INIT_HUMAN" | grep -qE "\[S\]|\[A\]|\[B\]|\[C\]|\[D\]|\[F\]"; then
+    pass "init-skill.py: grade badge in human output"
+else
+    fail "init-skill.py grade" "no grade badge found"
+fi
+
+# Init: dimension bars in human output
+if echo "$INIT_HUMAN" | grep -q "█"; then
+    pass "init-skill.py: dimension bars rendered"
+else
+    fail "init-skill.py bars" "no dimension bars found"
+fi
+
+# Init: contextual next steps
+if echo "$INIT_HUMAN" | grep -qE "(Strong baseline|Good start|Room to grow)"; then
+    pass "init-skill.py: contextual next steps shown"
+else
+    fail "init-skill.py next steps" "no contextual message found"
+fi
+
+# Init: progress feedback on stderr
+INIT_STDERR=$(python3 "$SCRIPT_DIR/init-skill.py" "$SKILL_DIR/SKILL.md" --dry-run --json 2>&1 1>/dev/null)
+if echo "$INIT_STDERR" | grep -q "Computing baseline score"; then
+    pass "init-skill.py: progress feedback on stderr"
+else
+    fail "init-skill.py progress" "no progress message on stderr"
+fi
+
 ##############################################################################
 # --- Summary ---
 ##############################################################################

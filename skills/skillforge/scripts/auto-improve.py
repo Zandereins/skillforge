@@ -34,6 +34,27 @@ from typing import Any, Optional
 SCRIPT_DIR = Path(__file__).parent
 
 
+def _sparkline(values: list[float]) -> str:
+    """Render a sparkline from a list of values using Unicode block characters."""
+    if not values:
+        return ""
+    blocks = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+    lo, hi = min(values), max(values)
+    spread = hi - lo if hi > lo else 1
+    return "".join(blocks[min(8, int((v - lo) / spread * 8))] for v in values)
+
+
+# Import terminal_art for grade system
+try:
+    from terminal_art import score_to_grade, grade_colored
+except ImportError:
+    def score_to_grade(s: float) -> str:
+        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
+            if s >= t: return g
+        return "F"
+    def grade_colored(g: str) -> str:
+        return f"[{g}]"
+
 # --- Imports from sibling modules ---
 
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -43,6 +64,12 @@ gradient_mod = importlib.import_module("text-gradient")
 
 # Optional imports
 _MISSING_MODULES: list[tuple[str, str]] = []
+
+try:
+    achievements_mod = importlib.import_module("achievements")
+except ImportError as e:
+    achievements_mod = None
+    _MISSING_MODULES.append(("achievements", str(e)))
 
 try:
     episodic_store = importlib.import_module("episodic-store")
@@ -313,6 +340,7 @@ def run_auto_improve(
         except Exception as e:
             print(f"Warning: strategy prediction failed: {e}", file=sys.stderr)
 
+    _loop_start = time.monotonic()
     current_score = baseline
     improvements = 0
     total_delta = 0
@@ -422,6 +450,15 @@ def run_auto_improve(
             if verbose:
                 print(f"✗ Discard (regression: {delta:+.1f})", file=sys.stderr)
 
+        # Scoreboard line
+        if verbose:
+            sc = new_score['composite'] if status == "keep" else current_score['composite']
+            bar_w = 20
+            filled = min(bar_w, int(round(sc / 100 * bar_w)))
+            bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+            sym = "\u2713" if status == "keep" else "\u2717"
+            print(f"Iter {iteration:>2}:  {bar}  {sc:.1f}/100  [{delta:+.1f}]  {sym} {status} ({top_patch['dimension']})", file=sys.stderr)
+
         entry = {
             "iteration": iteration,
             "status": status,
@@ -450,11 +487,16 @@ def run_auto_improve(
                 print(f"Warning: episodic store failed: {e}", file=sys.stderr)
 
     # Final summary
+    elapsed = time.monotonic() - _loop_start
     final_score = _score_skill(skill_path, eval_suite) if not dry_run else current_score
+
+    # Sparkline of score progression
+    score_history = [e.get("composite", 0) for e in state if e.get("status") in ("keep", "baseline")]
+    sparkline = _sparkline(score_history) if len(score_history) >= 2 else ""
 
     summary = {
         "skill_path": skill_path,
-        "iterations": len(state) - 1,  # Exclude baseline
+        "iterations": max(0, len(state) - 1),  # Exclude baseline
         "improvements": improvements,
         "total_delta": round(total_delta, 1),
         "baseline_composite": baseline["composite"],
@@ -462,6 +504,8 @@ def run_auto_improve(
         "final_dimensions": final_score["dimensions"],
         "stop_reason": reason if should_stop else "max_iterations" if iteration >= start_iteration + max_iterations else "no_patches",
         "dry_run": dry_run,
+        "elapsed_seconds": round(elapsed, 1),
+        "sparkline": sparkline,
     }
 
     return summary
@@ -495,17 +539,46 @@ def main():
     if args.json:
         print(json.dumps(summary, indent=2))
     else:
-        print(f"\n{'='*60}")
-        print(f"  Auto-Improve Complete")
-        print(f"{'='*60}")
-        print(f"  Iterations:  {summary['iterations']}")
-        print(f"  Improvements: {summary['improvements']}")
-        print(f"  Score:       {summary['baseline_composite']} → {summary['final_composite']} "
-              f"({summary['total_delta']:+.1f})")
-        print(f"  Stop reason: {summary['stop_reason']}")
+        elapsed = summary.get("elapsed_seconds", 0)
+        mins, secs = divmod(int(elapsed), 60)
+        time_str = f"{mins}m{secs:02d}s" if mins else f"{secs}s"
+
+        print(f"\n  SkillForge Auto-Improve Complete")
+        print(f"  {'─' * 50}")
+        sc = summary['final_composite']
+        from terminal_art import progress_bar
+        bar = progress_bar(sc, 20)
+        grade = score_to_grade(sc)
+        grade_str = grade_colored(grade)
+        print(f"  Score:  {summary['baseline_composite']:.0f} \u2192 {sc:.0f}/100  {bar}  ({summary['total_delta']:+.1f})  {grade_str}")
+        print(f"  Iters:  {summary['iterations']}  |  Kept: {summary['improvements']}  |  Time: {time_str}")
+        if summary.get('sparkline'):
+            print(f"  Trend:  {summary['sparkline']}  ({summary['baseline_composite']:.0f} \u2192 {sc:.0f})")
+        print(f"  Stop:   {summary['stop_reason']}")
         if summary['dry_run']:
-            print(f"  (DRY RUN — no changes written)")
-        print(f"{'='*60}")
+            print(f"  (dry run \u2014 no changes written)")
+
+        # Check and display achievements
+        if achievements_mod and not summary['dry_run']:
+            try:
+                skill_content = Path(summary['skill_path']).read_text(encoding="utf-8")
+                _name_m = re.search(r"^name:\s*(.+?)$", skill_content, re.MULTILINE)
+                _skill_name = _name_m.group(1).strip() if _name_m else Path(summary['skill_path']).parent.name
+                _state = _load_state(summary['skill_path'])
+                _current = {
+                    "composite": sc,
+                    "dimensions": summary.get('final_dimensions', {}),
+                }
+                _ach = achievements_mod.check_achievements(_state, _current, _skill_name)
+                newly = _ach.get('newly_unlocked', [])
+                if newly:
+                    print()
+                    for a in newly:
+                        print(f"  {a.get('badge', '')}  Achievement Unlocked: {a.get('name', '?')} \u2014 {a.get('desc', '')}")
+            except Exception:
+                pass
+
+        print()
 
 
 if __name__ == "__main__":

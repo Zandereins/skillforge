@@ -25,7 +25,7 @@ from pathlib import Path
 MAX_SKILL_SIZE = 1_000_000
 
 # Maximum entries in the file cache to prevent unbounded memory growth
-MAX_CACHE_ENTRIES = 50
+MAX_CACHE_ENTRIES = 500
 
 # Module-level file cache to avoid redundant reads within a single invocation
 _file_cache: dict[str, str] = {}
