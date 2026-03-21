@@ -118,6 +118,7 @@ See `references/metrics-catalog.md#custom` for setup and examples.
 
 | Command | Purpose |
 |---------|---------|
+| `/skillforge:init` | Bootstrap eval-suite + baseline for any skill |
 | `/skillforge` | Autonomous loop with GOAL + METRIC |
 | `/skillforge:auto` | Self-driving auto-improve: apply deterministic patches in a loop |
 | `/skillforge:analyze` | Skill analysis, gaps, anti-patterns, baseline |
@@ -269,6 +270,8 @@ Create new skills with `skill-creator`. For crashing skills, suggest using
 ## Files
 
 Run `ls -R` in the skill directory. Run `python3 scripts/score-skill.py SKILL.md --json` for current scores. Key files:
+- `scripts/init-skill.py` — Bootstrap eval-suite from any SKILL.md (`--json`, `--dry-run`)
+- `scripts/generate-report.py` — Shareable markdown improvement report
 - `scripts/score-skill.py` — Compute dimension scores incl. runtime (`--diff`, `--clarity`, `--weights`)
 - `scripts/text-gradient.py` — Invert scorer issues into fix list (`--json`, `--top N`, `--apply`, `--dry-run`)
 - `scripts/auto-improve.py` — Self-driving autonomous loop (`--max-iterations N`, `--dry-run`, `--resume`)

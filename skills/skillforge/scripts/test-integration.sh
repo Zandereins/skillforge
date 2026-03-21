@@ -1352,6 +1352,88 @@ else
     fail "parallel-runner dry-run" "output is not valid JSON or script crashed"
 fi
 
+echo ""
+echo "=== 17. Init & Report Tests ==="
+
+# 17.1 init-skill.py on own SKILL.md (dry-run, JSON)
+_INIT_RESULT=$(python3 "$SCRIPT_DIR/init-skill.py" "$SKILL_DIR/SKILL.md" --dry-run --json 2>/dev/null)
+if echo "$_INIT_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['skill_name']=='skillforge'; assert d['triggers']['positive']>=5" 2>/dev/null; then
+    pass "init-skill.py: generates valid eval-suite for own SKILL.md (dry-run)"
+else
+    fail "init-skill.py own SKILL.md" "invalid JSON or wrong skill_name"
+fi
+
+# 17.2 init-skill.py nonexistent file
+python3 "$SCRIPT_DIR/init-skill.py" /nonexistent/SKILL.md --json 2>/dev/null
+if [[ $? -eq 1 ]]; then
+    pass "init-skill.py: nonexistent file → exit 1"
+else
+    fail "init-skill.py nonexistent" "expected exit 1"
+fi
+
+# 17.3 init-skill.py --dry-run does not write file
+_INIT_TMP="$TMPDIR_BASE/init-dryrun-test"
+mkdir -p "$_INIT_TMP"
+echo -e "---\nname: dryrun-test\ndescription: A test skill\n---\nContent here" > "$_INIT_TMP/SKILL.md"
+python3 "$SCRIPT_DIR/init-skill.py" "$_INIT_TMP/SKILL.md" --dry-run --json > /dev/null 2>&1
+if [[ ! -f "$_INIT_TMP/eval-suite.json" ]]; then
+    pass "init-skill.py: --dry-run does NOT write eval-suite.json"
+else
+    fail "init-skill.py dry-run" "file was written despite --dry-run"
+fi
+
+# 17.4 init-skill.py: positive triggers >= 5
+_POS_COUNT=$(echo "$_INIT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['triggers']['positive'])" 2>/dev/null)
+if [[ "$_POS_COUNT" -ge 5 ]] 2>/dev/null; then
+    pass "init-skill.py: positive triggers >= 5 (got $_POS_COUNT)"
+else
+    fail "init-skill.py positive triggers" "got $_POS_COUNT, expected >= 5"
+fi
+
+# 17.5 init-skill.py: negative triggers >= 3
+_NEG_COUNT=$(echo "$_INIT_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['triggers']['negative'])" 2>/dev/null)
+if [[ "$_NEG_COUNT" -ge 3 ]] 2>/dev/null; then
+    pass "init-skill.py: negative triggers >= 3 (got $_NEG_COUNT)"
+else
+    fail "init-skill.py negative triggers" "got $_NEG_COUNT, expected >= 3"
+fi
+
+# 17.6 init-skill.py writes eval-suite.json (non-dry-run)
+_INIT_WRITE="$TMPDIR_BASE/init-write-test"
+mkdir -p "$_INIT_WRITE"
+echo -e "---\nname: write-test\ndescription: Testing write behavior\n---\nSome skill content" > "$_INIT_WRITE/SKILL.md"
+python3 "$SCRIPT_DIR/init-skill.py" "$_INIT_WRITE/SKILL.md" --json > /dev/null 2>&1
+if [[ -f "$_INIT_WRITE/eval-suite.json" ]]; then
+    # Validate it's valid JSON with required keys
+    if python3 -c "import json; d=json.load(open('$_INIT_WRITE/eval-suite.json')); assert 'triggers' in d" 2>/dev/null; then
+        pass "init-skill.py: writes valid eval-suite.json"
+    else
+        fail "init-skill.py write" "file written but invalid JSON"
+    fi
+else
+    fail "init-skill.py write" "eval-suite.json was not created"
+fi
+
+# 17.7 generate-report.py with synthetic JSONL
+cat > "$TMPDIR_BASE/report-test.jsonl" << 'EOFJSONL'
+{"exp":1,"scores":{"structure":65},"composite":65,"pass_rate":"3/5","delta":0,"status":"baseline","description":"baseline"}
+{"exp":2,"scores":{"structure":75},"composite":75,"pass_rate":"4/5","delta":10,"status":"keep","description":"added examples"}
+EOFJSONL
+_REPORT=$(python3 "$SCRIPT_DIR/generate-report.py" "$TMPDIR_BASE/report-test.jsonl" "$SKILL_DIR/SKILL.md" 2>/dev/null)
+if echo "$_REPORT" | grep -q "# SkillForge Report"; then
+    pass "generate-report.py: markdown starts with '# SkillForge Report'"
+else
+    fail "generate-report.py" "output missing report header"
+fi
+
+# 17.8 generate-report.py nonexistent SKILL.md
+python3 "$SCRIPT_DIR/generate-report.py" "$TMPDIR_BASE/report-test.jsonl" /nonexistent/SKILL.md 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    pass "generate-report.py: nonexistent SKILL.md → non-zero exit"
+else
+    fail "generate-report.py nonexistent" "expected non-zero exit"
+fi
+
 ##############################################################################
 # --- Summary ---
 ##############################################################################
