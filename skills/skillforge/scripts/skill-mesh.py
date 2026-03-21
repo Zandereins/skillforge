@@ -188,12 +188,15 @@ def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
 
 # --- Broken Handoff Detection ---
 
-def _levenshtein_distance(s1: str, s2: str) -> int:
-    """Simple Levenshtein distance for fuzzy matching."""
+def _levenshtein_distance(s1: str, s2: str, threshold: int = 2) -> int:
+    """Simple Levenshtein distance for fuzzy matching with early exit."""
     if len(s1) < len(s2):
-        return _levenshtein_distance(s2, s1)
+        return _levenshtein_distance(s2, s1, threshold)
     if len(s2) == 0:
         return len(s1)
+    # Length pruning: if length difference exceeds threshold, skip computation
+    if abs(len(s1) - len(s2)) > threshold:
+        return abs(len(s1) - len(s2))
 
     prev_row = list(range(len(s2) + 1))
     for i, c1 in enumerate(s1):
@@ -719,7 +722,7 @@ def main():
     parser = argparse.ArgumentParser(description="SkillForge Skill Mesh Analyzer")
     parser.add_argument("--skill-dirs", nargs="+", default=[], help="Directories to scan for SKILL.md files")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--incremental", action="store_true", help="(Planned) Use cached tokens — not yet implemented")
+    parser.add_argument("--incremental", action="store_true", help="Use content-hash cache to skip recomputation for unchanged skills")
     parser.add_argument("--severity", choices=["info", "warning", "critical"], default=None,
                         help="Minimum severity to report")
     args = parser.parse_args()

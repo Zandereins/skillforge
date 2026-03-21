@@ -213,7 +213,15 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
                     fi
                     ;;
                 pattern)
-                    if echo "$SKILL_CONTENT" | grep -qiE -- "$assertion_value" 2>/dev/null; then
+                    # Timeout guard against ReDoS from eval-suite patterns
+                    if command -v gtimeout &>/dev/null; then
+                        _GREP_TIMEOUT="gtimeout 2"
+                    elif command -v timeout &>/dev/null; then
+                        _GREP_TIMEOUT="timeout 2"
+                    else
+                        _GREP_TIMEOUT=""
+                    fi
+                    if echo "$SKILL_CONTENT" | $_GREP_TIMEOUT grep -qiE -- "$assertion_value" 2>/dev/null; then
                         assertion_passed="true"
                     fi
                     ;;

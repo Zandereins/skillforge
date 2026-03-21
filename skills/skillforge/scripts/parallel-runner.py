@@ -325,8 +325,8 @@ def main():
             prediction = meta.predict_best_strategy({}, meta_dir=meta.META_DIR_DEFAULT)
             if prediction.get("available") and prediction.get("predictions"):
                 strategies = [p["strategy"] for p in prediction["predictions"][:3]]
-        except Exception:
-            pass  # Fall back to defaults
+        except Exception as e:
+            print(f"Warning: auto strategy selection failed: {e}", file=sys.stderr)
 
     if args.dry_run:
         plan = {

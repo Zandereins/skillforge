@@ -32,6 +32,9 @@ MAX_EPISODES = 10_000
 CONSOLIDATION_BATCH = 1000
 MAX_FILE_SIZE = 10_000_000  # 10 MB
 
+# Module-level TF-IDF cache with mtime-based invalidation
+_tfidf_cache: dict[str, Any] = {"mtime": 0.0, "index": None, "episodes": None}
+
 
 # --- Tokenizer (reuses scorer patterns) ---
 
@@ -220,7 +223,16 @@ def recall(query: str, top_k: int = 5) -> list[dict]:
         if "text" not in ep:
             ep["text"] = _episode_text(ep)
 
-    index = TFIDFIndex(episodes)
+    # Use cached TF-IDF index if file hasn't changed
+    current_mtime = EPISODES_PATH.stat().st_mtime if EPISODES_PATH.exists() else 0.0
+    if _tfidf_cache["mtime"] == current_mtime and _tfidf_cache["index"] is not None:
+        index = _tfidf_cache["index"]
+    else:
+        index = TFIDFIndex(episodes)
+        _tfidf_cache["mtime"] = current_mtime
+        _tfidf_cache["index"] = index
+        _tfidf_cache["episodes"] = episodes
+
     results = index.search(query, top_k=top_k)
 
     recalled = []
@@ -277,6 +289,17 @@ def synthesize(query: str, top_k: int = 5) -> str:
 
 def _enforce_size_cap() -> None:
     """Consolidate oldest episodes when exceeding MAX_EPISODES."""
+    # File-size heuristic: skip full parse if file is small enough
+    if EPISODES_PATH.exists():
+        try:
+            fsize = EPISODES_PATH.stat().st_size
+            # ~200 bytes per episode average → MAX_EPISODES * 200 = threshold
+            if fsize < MAX_EPISODES * 200:
+                return
+        except OSError:
+            return
+    else:
+        return
     episodes = _load_episodes()
     if len(episodes) <= MAX_EPISODES:
         return

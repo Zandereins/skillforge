@@ -24,17 +24,17 @@ function sanitize(value) {
 }
 
 function readFailures(failuresPath) {
-  if (!fs.existsSync(failuresPath)) return [];
-
-  let stat;
+  // Single try/catch eliminates TOCTOU race (existsSync+statSync+readFileSync)
+  let content;
   try {
-    stat = fs.statSync(failuresPath);
+    content = fs.readFileSync(failuresPath, "utf8");
   } catch {
-    return [];
+    return []; // File doesn't exist or is unreadable
   }
-  if (!stat.isFile() || stat.size > MAX_FILE_SIZE) return [];
 
-  const content = fs.readFileSync(failuresPath, "utf8");
+  // Size check after read (content already in memory)
+  if (content.length > MAX_FILE_SIZE) return [];
+
   const entries = [];
   let skipped = 0;
   for (const line of content.split("\n")) {

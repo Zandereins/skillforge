@@ -23,7 +23,6 @@ import copy
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -45,18 +44,21 @@ gradient_mod = importlib.import_module("text-gradient")
 # Optional imports
 try:
     episodic_store = importlib.import_module("episodic-store")
-except Exception:
+except ImportError as e:
     episodic_store = None
+    print(f"Warning: episodic-store unavailable: {e}", file=sys.stderr)
 
 try:
     meta_report = importlib.import_module("meta-report")
-except Exception:
+except ImportError as e:
     meta_report = None
+    print(f"Warning: meta-report unavailable: {e}", file=sys.stderr)
 
 try:
     parallel_runner = importlib.import_module("parallel-runner")
-except Exception:
+except ImportError as e:
     parallel_runner = None
+    print(f"Warning: parallel-runner unavailable: {e}", file=sys.stderr)
 
 
 # --- State Management ---
@@ -69,20 +71,34 @@ def _state_path(skill_path: str) -> Path:
     return state_dir / "auto-improve-state.jsonl"
 
 
+MAX_STATE_SIZE = 5_000_000  # 5 MB
+
+
 def _load_state(skill_path: str) -> list[dict]:
     """Load state entries from JSONL file."""
     path = _state_path(skill_path)
     if not path.exists():
         return []
+    # Guard against unbounded state files
+    try:
+        if path.stat().st_size > MAX_STATE_SIZE:
+            print(f"Warning: state file exceeds {MAX_STATE_SIZE} bytes, truncating to recent entries", file=sys.stderr)
+            # Read only tail of file (last ~100 entries)
+            lines = path.read_text(encoding="utf-8").splitlines()
+            lines = lines[-100:]
+        else:
+            lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        print(f"Warning: cannot read state file: {e}", file=sys.stderr)
+        return []
     entries = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+    for line in lines:
+        line = line.strip()
+        if line:
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
     return entries
 
 
@@ -238,7 +254,7 @@ def run_auto_improve(
         print(f"Scoring baseline...", file=sys.stderr)
 
     # Clear scorer cache for fresh reads
-    scorer._file_cache.clear()
+    scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
     baseline = _score_skill(skill_path, eval_suite)
 
     if start_iteration == 0:
@@ -276,8 +292,8 @@ def run_auto_improve(
                 predicted_strategies = [p["strategy"] for p in prediction["predictions"]]
                 if verbose:
                     print(f"Predicted best strategies: {predicted_strategies[:3]}", file=sys.stderr)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: strategy prediction failed: {e}", file=sys.stderr)
 
     current_score = baseline
     improvements = 0
@@ -305,7 +321,7 @@ def run_auto_improve(
             # (actual worktree management requires git context)
 
         # Clear cache and compute gradients
-        scorer._file_cache.clear()
+        scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
         gradients = gradient_mod.compute_gradients(
             skill_path, eval_suite=eval_suite, include_clarity=True
         )
@@ -363,7 +379,7 @@ def run_auto_improve(
             continue
 
         # Score after patch
-        scorer._file_cache.clear()
+        scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
         new_score = _score_skill(skill_path, eval_suite)
         delta = round(new_score["composite"] - current_score["composite"], 1)
 
@@ -383,7 +399,7 @@ def run_auto_improve(
             # Revert
             if not dry_run:
                 Path(skill_path).write_text(backup_content, encoding="utf-8")
-                scorer._file_cache.clear()
+                scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
             if verbose:
                 print(f"✗ Discard (regression: {delta:+.1f})", file=sys.stderr)
 
@@ -411,8 +427,8 @@ def run_auto_improve(
                     learning=f"Auto-applied {top_patch['issue']}: {status} (delta: {delta:+.1f})",
                     domain="auto-improve",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Warning: episodic store failed: {e}", file=sys.stderr)
 
     # Final summary
     final_score = _score_skill(skill_path, eval_suite) if not dry_run else current_score
