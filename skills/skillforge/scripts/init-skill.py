@@ -21,12 +21,30 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Maximum skill file size: 1 MB
 MAX_SKILL_SIZE = 1_000_000
 
 SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(SCRIPT_DIR))
+
+# Import terminal_art for grade system and score cards
+try:
+    from terminal_art import score_to_grade, grade_colored, colored_bar, _is_color_tty
+except ImportError:
+    def score_to_grade(s: float) -> str:
+        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
+            if s >= t: return g
+        return "F"
+    def grade_colored(g: str) -> str:
+        return f"[{g}]"
+    def colored_bar(s: float, bar_w: int = 10) -> str:
+        filled = min(bar_w, int(round(s / 100 * bar_w)))
+        return "\u2588" * filled + "\u2591" * (bar_w - filled)
+    def _is_color_tty() -> bool:
+        return False
 
 # Action verb phrases extracted from imperative sentences in descriptions
 _ACTION_VERBS = [
@@ -556,6 +574,9 @@ def run_baseline(skill_path: str, eval_suite_path: str) -> dict:
         "--json",
     ]
 
+    print("Computing baseline score...", end="", file=sys.stderr, flush=True)
+    _t0 = time.monotonic()
+
     try:
         result = subprocess.run(
             cmd,
@@ -564,13 +585,20 @@ def run_baseline(skill_path: str, eval_suite_path: str) -> dict:
             timeout=60,
         )
     except subprocess.TimeoutExpired:
-        return {"composite": 0, "dimensions": {}, "error": "scorer timed out"}
+        elapsed = time.monotonic() - _t0
+        print(f"  timeout [{elapsed:.1f}s]", file=sys.stderr)
+        return {"composite": 0, "dimensions": {}, "error": "scorer timed out after 60s (eval suite may be too large)"}
     except Exception as exc:
+        elapsed = time.monotonic() - _t0
+        print(f"  error [{elapsed:.1f}s]", file=sys.stderr)
         return {"composite": 0, "dimensions": {}, "error": str(exc)}
 
+    elapsed = time.monotonic() - _t0
+    print(f"  done [{elapsed:.1f}s]", file=sys.stderr)
+
     if result.returncode != 0:
-        err = result.stderr.strip() or result.stdout.strip()
-        return {"composite": 0, "dimensions": {}, "error": err}
+        err_msg = result.stderr.strip()[:200] or result.stdout.strip()[:200]
+        return {"composite": 0, "dimensions": {}, "error": err_msg}
 
     try:
         data = json.loads(result.stdout)
@@ -640,12 +668,19 @@ def print_human_summary(
     if baseline.get("error"):
         print(f"Baseline Score: unavailable ({baseline['error']})")
     else:
-        print(f"Baseline Score: {baseline['composite']}/100")
+        score = baseline['composite']
+        grade = score_to_grade(score)
+        grade_str = grade_colored(grade)
+        print(f"Baseline Score: {score:.0f}/100  {grade_str}")
+        print()
         dims = baseline.get("dimensions", {})
         if dims:
-            for dim, score in dims.items():
-                label = f"  {dim}:"
-                print(f"{label:<20} {score}")
+            for dim, s in dims.items():
+                if isinstance(s, (int, float)) and s >= 0:
+                    bar = colored_bar(s)
+                    print(f"  {dim:15s} {bar}  {s:.0f}/100")
+                else:
+                    print(f"  {dim:15s} {'n/a':>15s}")
 
     print()
     if dry_run:
@@ -654,7 +689,24 @@ def print_human_summary(
         print(f"Written: {eval_suite_path}")
 
     print()
-    print("Next: Run /skillforge:auto to start autonomous improvement.")
+    # Contextual next steps based on score
+    if not baseline.get("error"):
+        score = baseline['composite']
+        if score >= 80:
+            print("Strong baseline! Run /skillforge:auto for final polish.")
+        elif score >= 60:
+            # Find weakest dimension
+            dims = baseline.get("dimensions", {})
+            scored = {d: s for d, s in dims.items() if isinstance(s, (int, float)) and s >= 0}
+            if scored:
+                weakest = min(scored, key=lambda d: scored[d])
+                print(f"Good start. Focus on {weakest}. Run /skillforge:auto to improve.")
+            else:
+                print("Good start. Run /skillforge:auto to start improving.")
+        else:
+            print("Room to grow! Run /skillforge to set a specific GOAL.")
+    else:
+        print("Next: Run /skillforge:auto to start autonomous improvement.")
 
 
 # ---------------------------------------------------------------------------
@@ -666,7 +718,7 @@ def main() -> None:
         description="SkillForge eval-suite bootstrapper — generate eval-suite.json from SKILL.md",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("skill_path", help="Path to SKILL.md")
+    parser.add_argument("skill_path", nargs="?", default=None, help="Path to SKILL.md (auto-discovered if omitted)")
     parser.add_argument(
         "--json",
         action="store_true",
@@ -685,6 +737,24 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    # Auto-discovery: find SKILL.md if no path given
+    if args.skill_path is None:
+        candidates = [Path("./SKILL.md")]
+        # Search parent dirs up to depth 2
+        for p in Path(".").glob("**/SKILL.md"):
+            if p not in candidates and len(p.parts) <= 4:
+                candidates.append(p)
+        found = None
+        for c in candidates:
+            if c.exists():
+                found = c
+                break
+        if found is None:
+            print("Error: no SKILL.md found. Provide a path or run from a skill directory.", file=sys.stderr)
+            sys.exit(1)
+        print(f"Found SKILL.md at {found}", file=sys.stderr)
+        args.skill_path = str(found)
 
     skill_path = str(Path(args.skill_path).resolve())
 

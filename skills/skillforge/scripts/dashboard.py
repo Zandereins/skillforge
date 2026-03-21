@@ -14,9 +14,40 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
+
+
+def _is_color_tty() -> bool:
+    """Check if stdout supports ANSI colors."""
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+
+
+def _colored_bar(score: int, bar_w: int = 10) -> str:
+    """Render a gauge bar, optionally colored by score threshold."""
+    filled = min(bar_w, int(round(score / 100 * bar_w)))
+    bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
+    if not _is_color_tty():
+        return bar
+    if score >= 80:
+        return f"\x1b[32m{bar}\x1b[0m"  # green
+    elif score >= 60:
+        return f"\x1b[33m{bar}\x1b[0m"  # yellow
+    else:
+        return f"\x1b[31m{bar}\x1b[0m"  # red
+
+# Import terminal_art for grade system
+try:
+    from terminal_art import score_to_grade, grade_colored
+except ImportError:
+    def score_to_grade(s: float) -> str:
+        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
+            if s >= t: return g
+        return "F"
+    def grade_colored(g: str) -> str:
+        return f"[{g}]"
 
 # Import sibling modules via importlib (hyphenated names)
 SCRIPT_DIR = Path(__file__).parent
@@ -36,6 +67,7 @@ scorer = _try_import("score-skill")
 gradient_engine = _try_import("text-gradient")
 mesh_analyzer = _try_import("skill-mesh")
 meta_reporter = _try_import("meta-report")
+achievements_mod = _try_import("achievements")
 
 
 def _load_jsonl_safe(path: Path, max_size: int = 10_000_000) -> list[dict]:
@@ -156,7 +188,7 @@ def generate_dashboard(
         data["avg_delta"] = round(sum(data["deltas"]) / len(data["deltas"]), 2) if data["deltas"] else 0
         del data["deltas"]
 
-    return {
+    result = {
         "skill_name": skill_name,
         "skill_path": skill_path,
         "composite_score": composite["score"],
@@ -178,6 +210,21 @@ def generate_dashboard(
         },
     }
 
+    # 6. Achievements
+    if achievements_mod is not None:
+        state_path = skill_dir / ".skillforge" / "auto-improve-state.jsonl"
+        state_entries = _load_jsonl_safe(state_path)
+        current_score = {
+            "composite": composite["score"],
+            "dimensions": {k: v["score"] for k, v in scores.items()},
+        }
+        ach_result = achievements_mod.check_achievements(state_entries, current_score, skill_name)
+        result["achievements"] = ach_result
+    else:
+        result["achievements"] = None
+
+    return result
+
 
 def _cluster_failures(failures: list[dict]) -> dict:
     """Cluster failures by type."""
@@ -196,22 +243,26 @@ def format_dashboard(dashboard: dict) -> str:
     lines.append("=" * 70)
     lines.append("")
 
-    # Score
+    # Score with gauge + grade
     score = dashboard["composite_score"]
-    indicator = "\u2713" if score >= 80 else "\u25b3" if score >= 60 else "\u2717"
-    lines.append(f"  {indicator} Composite Score: {score}/100")
+    bar = _colored_bar(score, bar_w=20)
+    grade = score_to_grade(score)
+    grade_str = grade_colored(grade)
+    lines.append(f"  Composite: {bar}  {score}/100  {grade_str}")
 
     conf = dashboard["confidence"]
     if conf["measured"] < conf["total"]:
         lines.append(f"    [{conf['measured']}/{conf['total']} dimensions, {conf['weight_coverage']:.0%} coverage]")
     lines.append("")
 
-    # Dimensions
+    # Dimensions (with colored gauge bars)
     lines.append("  Dimensions:")
     for dim, s in dashboard["dimensions"].items():
-        ind = "\u2713" if s >= 70 else "\u25b3" if s >= 50 else "\u2717" if s >= 0 else "\u2014"
-        score_str = f"{s}" if s >= 0 else "n/a"
-        lines.append(f"    {ind} {dim:15s} {score_str:>5s}")
+        if s >= 0:
+            bar = _colored_bar(s)
+            lines.append(f"    {dim:15s} {bar}  {s}/100")
+        else:
+            lines.append(f"    {dim:15s} {'n/a':>15s}")
     lines.append("")
 
     # Top gradients
@@ -260,6 +311,12 @@ def format_dashboard(dashboard: dict) -> str:
                 f"avg_delta={data['avg_delta']:+.1f} "
                 f"({data['kept']}/{data['total']})"
             )
+        lines.append("")
+
+    # Achievements
+    ach = dashboard.get("achievements")
+    if ach and achievements_mod is not None:
+        lines.append(achievements_mod.format_achievements(ach))
         lines.append("")
 
     lines.append("=" * 70)

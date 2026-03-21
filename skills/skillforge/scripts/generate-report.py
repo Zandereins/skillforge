@@ -22,6 +22,23 @@ from typing import Any, Optional
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+# Import terminal_art for grade system and heatmap
+try:
+    from terminal_art import score_to_grade, render_heatmap
+except ImportError:
+    def score_to_grade(s: float) -> str:
+        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
+            if s >= t: return g
+        return "F"
+    render_heatmap = None
+
+# Optional: achievements
+try:
+    import importlib as _il
+    achievements_mod = _il.import_module("achievements")
+except Exception:
+    achievements_mod = None
+
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -71,6 +88,7 @@ def load_progress(results_path: str) -> dict[str, Any]:
         summary = analyzer.generate_summary()
         strategy_stats = analyzer.compute_strategy_stats()
         summary["strategy_stats"] = strategy_stats
+        summary["_results_path"] = results_path
         return summary
     except (FileNotFoundError, ValueError) as exc:
         return {"error": str(exc)}
@@ -82,11 +100,31 @@ def load_progress(results_path: str) -> dict[str, Any]:
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-def render_progress_bar(score: float, width: int = 20) -> str:
-    """Return an ASCII progress bar like: ████████████░░░░░░░░."""
-    filled = min(width, int(round(score / 100 * width)))
-    empty = width - filled
-    return "\u2588" * filled + "\u2591" * empty
+try:
+    from terminal_art import progress_bar as render_progress_bar
+except ImportError:
+    def render_progress_bar(score: float, width: int = 20) -> str:
+        """Return an ASCII progress bar like: ████████████░░░░░░░░."""
+        filled = min(width, int(round(score / 100 * width)))
+        empty = width - filled
+        return "\u2588" * filled + "\u2591" * empty
+
+
+def _load_jsonl_entries(path: str) -> list[dict]:
+    """Load all entries from a JSONL file, skipping malformed lines."""
+    entries: list[dict] = []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+    except OSError:
+        pass
+    return entries
 
 
 def trend_arrow(trend: str) -> str:
@@ -174,8 +212,8 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
     # --- Score Summary table ---
     lines.append("## Score Summary")
     lines.append("")
-    lines.append("| Dimension | Baseline | Current | Delta | Trend |")
-    lines.append("|-----------|----------|---------|-------|-------|")
+    lines.append("| Dimension | Baseline | Current | Delta | Grade | Trend |")
+    lines.append("|-----------|----------|---------|-------|-------|-------|")
 
     all_dims = sorted(set(list(baseline_scores.keys()) + list(current_dims.keys())))
     for dim in all_dims:
@@ -186,15 +224,17 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
         delta = (c - b) if (b is not None and c is not None) else None
         arrow = trend_arrow(trends.get(dim, ""))
         delta_cell = _delta_str(delta) if delta is not None else "n/a"
-        lines.append(f"| {dim.capitalize()} | {_fmt(b)} | {_fmt(c)} | {delta_cell} | {arrow} |")
+        dim_grade = score_to_grade(c) if c is not None else "n/a"
+        lines.append(f"| {dim.capitalize()} | {_fmt(b)} | {_fmt(c)} | {delta_cell} | {dim_grade} | {arrow} |")
 
     # Composite row
     comp_baseline = baseline_composite
     comp_delta = (current_composite - comp_baseline) if comp_baseline is not None else None
     comp_delta_cell = _delta_str(comp_delta) if comp_delta is not None else "n/a"
+    current_grade = score_to_grade(current_composite)
     lines.append(
         f"| **Composite** | **{_fmt(comp_baseline)}** | **{_fmt(current_composite)}** "
-        f"| **{comp_delta_cell}** | **\u2014** |"
+        f"| **{comp_delta_cell}** | **{current_grade}** | **\u2014** |"
     )
     lines.append("")
 
@@ -207,9 +247,37 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
         lines.append(f"Baseline:  {bar_b}  {comp_baseline:.0f}/100")
     bar_c = render_progress_bar(current_composite)
     delta_label = f"  ({_delta_str(comp_delta)})" if comp_delta is not None else ""
-    lines.append(f"Current:   {bar_c}  {current_composite:.0f}/100{delta_label}")
+    lines.append(f"Current:   {bar_c}  {current_composite:.0f}/100  [{current_grade}]{delta_label}")
     lines.append("```")
     lines.append("")
+
+    # --- Dimension Heatmap ---
+    # Load iteration data from JSONL for heatmap rendering
+    _results_path = progress.get("_results_path")
+    if render_heatmap is not None and _results_path:
+        try:
+            _raw_entries = _load_jsonl_entries(_results_path)
+            _heatmap_iters = [
+                {"dimensions": e["scores"]}
+                for e in _raw_entries
+                if e.get("scores") and isinstance(e["scores"], dict)
+            ]
+
+            if len(_heatmap_iters) >= 3:
+                # Collect all dimension names
+                _hdims = sorted(set(
+                    d for it in _heatmap_iters for d in it.get("dimensions", {}).keys()
+                ))
+                if _hdims:
+                    hmap = render_heatmap(_hdims, _heatmap_iters)
+                    lines.append("## Dimension Heatmap")
+                    lines.append("")
+                    lines.append("```")
+                    lines.append(hmap)
+                    lines.append("```")
+                    lines.append("")
+        except (OSError, ValueError):
+            pass
 
     # --- Top Improvements ---
     lines.append("## Top Improvements")
@@ -290,6 +358,40 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
         else:
             lines.append("Run the scorer with an eval suite to get dimension-level guidance.")
 
+    lines.append("")
+
+    # Achievements badge line
+    if achievements_mod is not None and _results_path:
+        try:
+            _ach_state = _load_jsonl_entries(_results_path)
+            _ach_current = {
+                "composite": current_composite,
+                "dimensions": current_dims,
+            }
+            _ach_result = achievements_mod.check_achievements(
+                _ach_state, _ach_current, skill_name, check_only=True
+            )
+            _all_ach = _ach_result.get("all_unlocked", [])
+            if _all_ach:
+                badges = " ".join(a.get("badge", "") for a in _all_ach)
+                total_ach = _ach_result["total_unlocked"]
+                avail_ach = _ach_result["total_available"]
+                lines.append(f"**Achievements:** {badges} ({total_ach}/{avail_ach})")
+                lines.append("")
+        except Exception:
+            pass
+
+    # Share snippet
+    total_iters = progress.get("total_experiments", 0)
+    before_str = f"{comp_baseline:.0f}" if comp_baseline is not None else "?"
+    after_str = f"{current_composite:.0f}"
+    lines.append("---")
+    lines.append("**Share this result:**")
+    lines.append("```")
+    lines.append(f"SkillForge improved my {skill_name} from {before_str} \u2192 {after_str} points autonomously.")
+    lines.append(f"{total_iters} iterations, zero manual work.")
+    lines.append("github.com/Zandereins/skillforge")
+    lines.append("```")
     lines.append("")
     lines.append(
         f"---\n*Generated by [SkillForge](https://github.com/Zandereins/skillforge) | {timestamp}*"

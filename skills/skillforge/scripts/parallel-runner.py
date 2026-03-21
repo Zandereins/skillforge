@@ -386,7 +386,7 @@ def main():
         winner = select_winner(branches)
     finally:
         # Always clean up worktrees, even if scoring raised an exception
-        keep = winner["name"] if winner else None
+        keep = winner.get("name") if winner and isinstance(winner, dict) else None
         cleaned = cleanup(branches, keep_branch=keep)
 
     result = {

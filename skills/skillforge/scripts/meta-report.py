@@ -218,6 +218,15 @@ def analyze_triggers(meta_dir: Path) -> dict:
             "tp": tp, "fp": fp, "tn": tn, "fn": fn,
         }
 
+    if not threshold_results:
+        return {
+            "available": True,
+            "entries": len(entries),
+            "thresholds": {},
+            "best_threshold": None,
+            "best_f1": 0,
+        }
+
     best_thresh = max(threshold_results, key=lambda t: threshold_results[t]["f1"])
 
     return {
