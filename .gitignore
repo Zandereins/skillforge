@@ -3,6 +3,8 @@ skillforge-results.tsv
 skillforge-eval-results.json
 skillforge-report.md
 skillforge-workspace/
+.skillforge-eval/
+.skillforge/
 
 # Python
 __pycache__/

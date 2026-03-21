@@ -101,14 +101,17 @@ fi
 
 # --- Validate inputs ---
 if [[ ! -f "$SKILL_MD" ]]; then
-    echo '{"error": "SKILL.md not found", "path": "'"$SKILL_MD"'"}' | jq .
+    jq -n --arg path "$SKILL_MD" '{"error": "SKILL.md not found", "path": $path}'
     exit 1
 fi
 
 if [[ ! -f "$EVAL_SUITE" ]]; then
-    echo '{"error": "eval-suite not found", "path": "'"$EVAL_SUITE"'"}' | jq .
+    jq -n --arg path "$EVAL_SUITE" '{"error": "eval-suite not found", "path": $path}'
     exit 1
 fi
+
+# Resolve to absolute paths to ensure consistent SKILL_DIR/FAILURES_DIR
+SKILL_MD=$(cd "$(dirname "$SKILL_MD")" && echo "$(pwd)/$(basename "$SKILL_MD")")
 
 # --- Extract skill name from SKILL.md ---
 SKILL_NAME=$(grep "^name:" "$SKILL_MD" | head -1 | sed 's/^name:[[:space:]]*//' | sed 's/[[:space:]]*$//' || echo "unknown")
@@ -119,7 +122,13 @@ EXPERIMENT_DIR="${SKILL_DIR}/.skillforge-eval"
 mkdir -p "$EXPERIMENT_DIR"
 COUNTER_FILE="$EXPERIMENT_DIR/counter"
 if [[ -f "$COUNTER_FILE" ]]; then
-    EXPERIMENT_ID=$(($(cat "$COUNTER_FILE") + 1))
+    RAW_COUNTER=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
+    if [[ "$RAW_COUNTER" =~ ^[0-9]+$ ]]; then
+        EXPERIMENT_ID=$((RAW_COUNTER + 1))
+    else
+        echo "Warning: counter file contained non-numeric value, resetting to 1" >&2
+        EXPERIMENT_ID=1
+    fi
 else
     EXPERIMENT_ID=1
 fi
@@ -167,70 +176,72 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
     {
         ASSERTIONS_PASSED=0
         ASSERTIONS_TOTAL=0
-        BINARY_ARRAY="[]"
 
-        # Process each test case
-        test_count=$(jq '.test_cases | length' "$EVAL_SUITE")
-        for ((i=0; i<test_count; i++)); do
-            tc=$(jq ".test_cases[$i]" "$EVAL_SUITE")
-            tc_id=$(echo "$tc" | jq -r '.id')
+        # Extract all assertions in one jq call as NUL-separated blocks
+        # Each block: tc_id\ntype\nvalue\ndescription\n\0
+        ASSERTIONS_FILE=$(mktemp)
+        jq -rj '.test_cases[]? | .id as $tc_id | (.assertions // [])[] |
+            "\($tc_id)\n\(.type)\n\(.value)\n\(.description)\n\u0000"' "$EVAL_SUITE" > "$ASSERTIONS_FILE"
 
-            assertions=$(echo "$tc" | jq '.assertions // []')
-            assertion_count=$(echo "$assertions" | jq 'length')
+        # Collect results as JSONL lines (one per assertion), build array at end
+        RESULTS_LINES=$(mktemp)
 
-            for ((j=0; j<assertion_count; j++)); do
-                assertion=$(echo "$assertions" | jq ".[$j]")
-                assertion_type=$(echo "$assertion" | jq -r '.type')
-                assertion_value=$(echo "$assertion" | jq -r '.value')
-                assertion_desc=$(echo "$assertion" | jq -r '.description')
+        while IFS= read -r -d '' assertion_block; do
+            tc_id=$(printf '%s' "$assertion_block" | sed -n '1p')
+            assertion_type=$(printf '%s' "$assertion_block" | sed -n '2p')
+            assertion_value=$(printf '%s' "$assertion_block" | sed -n '3p')
+            assertion_desc=$(printf '%s' "$assertion_block" | sed -n '4p')
+            # Skip runtime-only assertion types in static check
+            if echo "$assertion_type" | grep -qE "^($RUNTIME_ONLY_TYPES)$"; then
+                continue
+            fi
 
-                # Skip runtime-only assertion types in static check
-                if echo "$assertion_type" | grep -qE "^($RUNTIME_ONLY_TYPES)$"; then
-                    continue
-                fi
+            ASSERTIONS_TOTAL=$((ASSERTIONS_TOTAL + 1))
 
-                ASSERTIONS_TOTAL=$((ASSERTIONS_TOTAL + 1))
+            # Evaluate assertion against skill content (static check)
+            assertion_passed="false"
 
-                # Evaluate assertion against skill content (static check)
-                assertion_passed="false"
-
-                case "$assertion_type" in
-                    contains)
-                        if echo "$SKILL_CONTENT" | grep -qiF -- "$assertion_value" 2>/dev/null; then
-                            assertion_passed="true"
-                        fi
-                        ;;
-                    excludes)
-                        if ! echo "$SKILL_CONTENT" | grep -qiF -- "$assertion_value" 2>/dev/null; then
-                            assertion_passed="true"
-                        fi
-                        ;;
-                    pattern)
-                        if echo "$SKILL_CONTENT" | grep -qiE -- "$assertion_value" 2>/dev/null; then
-                            assertion_passed="true"
-                        fi
-                        ;;
-                    *)
-                        # Unknown assertion type — skip, mark as passed
+            case "$assertion_type" in
+                contains)
+                    if echo "$SKILL_CONTENT" | grep -qiF -- "$assertion_value" 2>/dev/null; then
                         assertion_passed="true"
-                        ;;
-                esac
+                    fi
+                    ;;
+                excludes)
+                    if ! echo "$SKILL_CONTENT" | grep -qiF -- "$assertion_value" 2>/dev/null; then
+                        assertion_passed="true"
+                    fi
+                    ;;
+                pattern)
+                    if echo "$SKILL_CONTENT" | grep -qiE -- "$assertion_value" 2>/dev/null; then
+                        assertion_passed="true"
+                    fi
+                    ;;
+                *)
+                    # Unknown assertion type — warn and skip
+                    echo "  Warning: unknown assertion type '$assertion_type' in test case '$tc_id', skipping" >&2
+                    continue
+                    ;;
+            esac
 
-                if [[ "$assertion_passed" == "true" ]]; then
-                    ASSERTIONS_PASSED=$((ASSERTIONS_PASSED + 1))
-                fi
+            if [[ "$assertion_passed" == "true" ]]; then
+                ASSERTIONS_PASSED=$((ASSERTIONS_PASSED + 1))
+            fi
 
-                BINARY_ARRAY=$(echo "$BINARY_ARRAY" | jq \
-                    --arg tc_id "$tc_id" \
-                    --arg type "$assertion_type" \
-                    --arg desc "$assertion_desc" \
-                    --argjson passed "$assertion_passed" \
-                    '. += [{"test_case": $tc_id, "type": $type, "description": $desc, "passed": $passed}]')
-            done
-        done
+            # Append result as JSONL line (using jq for correct JSON escaping)
+            jq -n -c --arg tc "$tc_id" --arg type "$assertion_type" \
+                --arg desc "$assertion_desc" --argjson passed "$assertion_passed" \
+                '{"test_case":$tc,"type":$type,"description":$desc,"passed":$passed}' >> "$RESULTS_LINES"
+        done < "$ASSERTIONS_FILE"
 
-        # Output results
-        echo "$BINARY_ARRAY" | jq .
+        # Build the JSON array from collected JSONL results
+        if [[ -s "$RESULTS_LINES" ]]; then
+            jq -s '.' "$RESULTS_LINES"
+        else
+            echo "[]"
+        fi
+
+        rm -f "$ASSERTIONS_FILE" "$RESULTS_LINES"
     } > "$BINARY_OUTPUT"
 
     BINARY_RESULTS=$(cat "$BINARY_OUTPUT")
@@ -380,8 +391,8 @@ if [[ -n "$RESULTS_LOG" ]]; then
     LOG_DELTA=0
     if [[ -f "$RESULTS_LOG" ]] && [[ -s "$RESULTS_LOG" ]]; then
         PREV_COMPOSITE=$(tail -1 "$RESULTS_LOG" | jq -r '.composite // 0' 2>/dev/null || echo "0")
-        LOG_DELTA=$(python3 -c "print(round($COMPOSITE_SCORE - $PREV_COMPOSITE, 1))" 2>/dev/null || echo "0")
-        if python3 -c "exit(0 if $COMPOSITE_SCORE > $PREV_COMPOSITE else 1)" 2>/dev/null; then
+        LOG_DELTA=$(python3 -c "import sys; print(round(float(sys.argv[1]) - float(sys.argv[2]), 1))" "$COMPOSITE_SCORE" "$PREV_COMPOSITE" 2>/dev/null || echo "0")
+        if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) > float(sys.argv[2]) else 1)" "$COMPOSITE_SCORE" "$PREV_COMPOSITE" 2>/dev/null; then
             LOG_STATUS="keep"
         else
             LOG_STATUS="discard"

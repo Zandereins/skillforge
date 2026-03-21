@@ -235,9 +235,14 @@ git commit -m "experiment: exp-005 [triggers] Add data pipeline, workflow automa
 
 Experiment: exp-005
 Dimension: triggers
+Gradient-ID: triggers:false_negatives:2
 Change: Extended description with domain-specific trigger phrases
 Goal: Improve trigger matching accuracy for real-world use cases"
 ```
+
+**Gradient traceability:** When a gradient from `text-gradient.py` is applied, include
+the `gradient_id` (format: `dimension:issue`) in the commit message trailer. This enables
+tracking which gradients have high keep-rates via `strategy-log.jsonl`.
 
 **Output:**
 ```
