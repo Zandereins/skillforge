@@ -282,6 +282,9 @@ def run_auto_improve(
     current_score = baseline
     improvements = 0
     total_delta = 0
+    reason = ""
+    should_stop = False
+    iteration = start_iteration
 
     for iteration in range(start_iteration + 1, start_iteration + max_iterations + 1):
         if verbose:

@@ -41,7 +41,7 @@ class ProgressAnalyzer:
         if not self.results_path.exists():
             raise FileNotFoundError(f"Results file not found: {self.results_path}")
 
-        with open(self.results_path, "r") as f:
+        with open(self.results_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -107,7 +107,7 @@ class ProgressAnalyzer:
         if len(kept_exps) < 2:
             return {}
 
-        scores = {e.get("exp"): e.get("scores", {}) for e in kept_exps}
+        scores = {e["exp"]: e.get("scores", {}) for e in kept_exps if "exp" in e}
         dimensions = set()
         for score_dict in scores.values():
             dimensions.update(score_dict.keys())

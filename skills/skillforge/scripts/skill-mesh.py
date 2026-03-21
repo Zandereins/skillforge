@@ -223,17 +223,34 @@ def detect_broken_handoffs(skills: list[dict]) -> list[dict]:
         # And underscore variant
         name_table[slug.replace("-", "_")] = skill
 
-    # Handoff patterns
+    # Handoff patterns — only match structural skill references, not prose
+    # Bare "use" is excluded to prevent matching every English sentence.
+    # "use" only matches when followed by a quoted/backtick-delimited name.
     handoff_pattern = re.compile(
-        r"(?:use|hand\s*off\s*to|then\s+use|pass\s+to|chain\s+with|"
-        r"followed\s+by|after\s+.*use|before\s+.*use|instead\s+use|"
-        r"suggest\s+using|complementary\s+.*skill|works\s+with)\s+"
+        r"(?:"
+        # Strong handoff verbs — almost always real skill references
+        r"hand\s*off\s*to|pass\s+to|chain\s+with|followed\s+by"
+        r"|then\s+use|instead\s+use|suggest\s+using"
+        r"|complementary\s+\w+\s+skill|works\s+with"
+        # "use" only when the name is backtick/quote-wrapped
+        r"|use\s+[`'\"]"
+        # "after/before <word> use" — anchored, no greedy wildcard
+        r"|after\s+\w+\s+use|before\s+\w+\s+use"
+        r")\s*"
         r"[`'\"]?([a-zA-Z][a-zA-Z0-9_-]+(?:\s+[a-zA-Z0-9_-]+)?)[`'\"]?",
         re.IGNORECASE
     )
 
     # Also match /slash-command references
     slash_pattern = re.compile(r"/([a-zA-Z][a-zA-Z0-9_-]+(?::[a-zA-Z0-9_-]+)?)")
+
+    # Common words that aren't skill names — defined once, not per-skill
+    _false_positives = {
+        "this", "that", "the", "a", "an", "it", "your", "my",
+        "another", "other", "same", "different", "each", "all",
+        "first", "next", "last", "new", "old", "any", "every",
+        "results", "history", "data", "mode",
+    }
 
     issues = []
 
@@ -242,15 +259,6 @@ def detect_broken_handoffs(skills: list[dict]) -> list[dict]:
 
         # Find handoff references
         refs = set()
-        # Common words that aren't skill names
-        _false_positives = {
-            "this", "that", "the", "a", "an", "it", "your", "my",
-            "constraints to", "results", "history", "data", "mode",
-            "another", "other", "same", "different", "each", "all",
-            "first", "next", "last", "new", "old", "any", "every",
-            "for brand-new", "discovery mode", "parallel mode",
-            "sequential mode", "analyze-skill", "current best",
-        }
         for match in handoff_pattern.finditer(content):
             ref = match.group(1).strip().lower()
             if ref in _false_positives:

@@ -81,8 +81,16 @@ def create_branches(
         base_branch = result.stdout.strip() or "HEAD"
 
     branches = []
-    parent_dir = Path(skill_path).resolve().parent.parent.parent  # Go up from scripts
-    worktree_base = parent_dir.parent / "sf-parallel"
+    # Find repo root via git, fallback to parent traversal
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+        repo_root = Path(result.stdout.strip())
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        repo_root = Path(skill_path).resolve().parent.parent.parent
+    worktree_base = repo_root.parent / "sf-parallel"
 
     for i, strategy in enumerate(strategies[:3]):  # Max 3 branches
         branch_name = f"sf-parallel-{chr(65 + i)}"  # A, B, C

@@ -310,12 +310,14 @@ def _enforce_size_cap() -> None:
                                     "outcome": outcome, "learning": best_learning}),
         })
 
-    # Rewrite file
+    # Atomic rewrite: write to temp file then rename (crash-safe on POSIX)
     all_episodes = consolidated + keep
     EPISODES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(EPISODES_PATH, "w", encoding="utf-8") as f:
+    tmp_path = EPISODES_PATH.with_suffix(".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
         for ep in all_episodes:
             f.write(json.dumps(ep) + "\n")
+    tmp_path.replace(EPISODES_PATH)
 
     print(f"Consolidated {len(old)} old episodes into {len(consolidated)}", file=sys.stderr)
 
