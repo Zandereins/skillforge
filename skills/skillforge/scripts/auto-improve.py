@@ -266,10 +266,10 @@ def _should_stop(state: list[dict], current_score: dict) -> tuple[bool, str]:
     if measurable and all(v >= 90 for v in measurable.values()):
         return True, f"all dimensions >= 90"
 
-    # EMA-based plateau detection: EMA ROI < 0.1 for the last 5 entries
+    # EMA-based plateau detection: EMA ROI < 0.1 for the last 5 positions
     qualifying = [e for e in state if e.get("status") in ("keep", "discard")]
-    if len(qualifying) >= 5:
-        # Check EMA at each of the last 5 positions (including the final one)
+    if len(qualifying) >= 7:
+        # Check EMA at each of the last 5 positions (requires >=3 entries per slice)
         all_low = True
         for offset in range(5):
             end_idx = len(qualifying) - offset  # includes final entry when offset=0

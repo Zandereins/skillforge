@@ -928,7 +928,6 @@ def apply_patches(skill_path: str, patches: list[dict], dry_run: bool = False) -
         tmp_path.write_text(new_content, encoding="utf-8")
         tmp_path.replace(Path(skill_path))
         # Invalidate scorer cache for this file
-        cache_key = str(Path(skill_path).resolve())
         scorer.invalidate_cache(skill_path)
 
     return {
