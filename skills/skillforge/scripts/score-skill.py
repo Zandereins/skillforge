@@ -18,7 +18,6 @@ Outputs composite score and per-dimension breakdown.
 import argparse
 import json
 import math
-import os
 import re
 import subprocess
 import sys
@@ -1079,17 +1078,40 @@ def score_runtime(skill_path: str, eval_suite: Optional[dict] = None,
     }
 
 
+_calibrated_weights_cache: Optional[dict] = None
+_calibrated_weights_mtime: float = 0.0
+_calibrated_weights_path: str = ""
+
+
 def _load_calibrated_weights() -> Optional[dict]:
-    """Load auto-calibrated weights from ~/.skillforge/meta/calibrated-weights.json."""
-    weights_path = Path.home() / ".skillforge" / "meta" / "calibrated-weights.json"
-    if not weights_path.exists():
+    """Load auto-calibrated weights from ~/.skillforge/meta/calibrated-weights.json.
+
+    Uses module-level cache with mtime invalidation to avoid repeated disk reads.
+    """
+    global _calibrated_weights_cache, _calibrated_weights_mtime, _calibrated_weights_path
+    path = Path.home() / ".skillforge" / "meta" / "calibrated-weights.json"
+    path_str = str(path)
+
+    if not path.exists():
+        _calibrated_weights_cache = None
         return None
+
+    current_mtime = path.stat().st_mtime
+    if (_calibrated_weights_cache is not None
+            and path_str == _calibrated_weights_path
+            and current_mtime == _calibrated_weights_mtime):
+        return _calibrated_weights_cache
+
     try:
-        data = json.loads(weights_path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data, dict) and all(isinstance(v, (int, float)) for v in data.values()):
+            _calibrated_weights_cache = data
+            _calibrated_weights_mtime = current_mtime
+            _calibrated_weights_path = path_str
             return data
     except (json.JSONDecodeError, OSError):
         pass
+    _calibrated_weights_cache = None
     return None
 
 

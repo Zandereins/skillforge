@@ -87,6 +87,27 @@ def load_eval_suite(skill_path: str) -> Optional[dict]:
     return None
 
 
+def validate_regex_complexity(pattern: str, max_length: int = 500) -> tuple[bool, str]:
+    """Reject regex patterns with catastrophic backtracking potential.
+
+    Returns (is_safe, reason).
+    """
+    if len(pattern) > max_length:
+        return False, f"pattern too long ({len(pattern)} > {max_length})"
+
+    # Detect nested quantifiers: (a+)+, (a*)+, (a+)*, etc.
+    nested_quant = re.compile(r'[+*]\)?[+*?{]')
+    if nested_quant.search(pattern):
+        return False, "nested quantifiers detected (potential ReDoS)"
+
+    # Detect overlapping alternations with quantifiers
+    overlap = re.compile(r'\([^)]*\|[^)]*\)[+*]{1,2}')
+    if overlap.search(pattern):
+        return False, "overlapping alternation with quantifier (potential ReDoS)"
+
+    return True, "ok"
+
+
 def regex_search_safe(pattern: str, text: str, timeout: int = 2) -> bool:
     """Regex search with timeout to prevent ReDoS from user-supplied patterns.
 
@@ -112,3 +133,30 @@ def regex_search_safe(pattern: str, text: str, timeout: int = 2) -> bool:
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old_handler)
+
+
+def load_jsonl_safe(path: str | Path, max_size: int = 10_000_000) -> list[dict]:
+    """Safely load a JSONL file with size limit and malformed-line tolerance.
+
+    Returns a list of parsed JSON objects. Skips malformed lines silently.
+    """
+    p = Path(path)
+    if not p.exists():
+        return []
+    try:
+        if p.stat().st_size > max_size:
+            return []
+        lines = p.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+
+    results = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            results.append(json.loads(line))
+        except (json.JSONDecodeError, ValueError):
+            continue
+    return results

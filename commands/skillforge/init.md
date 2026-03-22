@@ -52,17 +52,17 @@ Initialize SkillForge improvement tracking for a skill.
 
 4. Save the generated eval suite as JSON:
    ```bash
-   python3 scripts/generate-eval-suite.py \
+   python3 scripts/init-skill.py \
      /path/to/SKILL.md \
      --goal "USER'S IMPROVEMENT GOAL" \
-     --output /path/to/skill/skillforge-evals.json
+     --output /path/to/skill/eval-suite.json
    ```
 
 5. Run the baseline benchmark using the new eval suite:
    ```bash
    python3 scripts/score-skill.py \
      /path/to/SKILL.md \
-     --eval-suite /path/to/skill/skillforge-evals.json \
+     --eval-suite /path/to/skill/eval-suite.json \
      --json > /tmp/baseline-score.json
    ```
 
@@ -94,7 +94,7 @@ Initialize SkillForge improvement tracking for a skill.
    Pass rate: X/Y assertions passing
 
    Setup complete:
-   ✓ Eval suite: skillforge-evals.json
+   ✓ Eval suite: eval-suite.json
    ✓ Results log: skillforge-results.jsonl
    ✓ History: skillforge-history/exp-000-baseline.md
 

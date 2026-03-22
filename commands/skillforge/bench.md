@@ -29,16 +29,16 @@ Establish or update a quality baseline benchmark for the target skill.
    ```bash
    python3 scripts/score-skill.py \
      /path/to/SKILL.md \
-     --eval-suite /path/to/skill/skillforge-evals.json \
+     --eval-suite /path/to/skill/eval-suite.json \
      --json
    ```
 
 5. Run binary eval assertions (if eval suite exists):
    ```bash
-   python3 scripts/eval-assertions.py \
+   bash scripts/run-eval.sh \
      /path/to/SKILL.md \
-     --eval-suite /path/to/skill/skillforge-evals.json \
-     --json
+     --eval-suite /path/to/skill/eval-suite.json \
+     --no-runtime-auto
    ```
 
 6. Calculate composite score (weighted average of 6 dimensions) and pass rate:
@@ -58,13 +58,11 @@ Establish or update a quality baseline benchmark for the target skill.
    cp /path/to/SKILL.md /path/to/skill/skillforge-history/exp-NNN-benchmark.md
    ```
 
-9. If the user provided `--compare FILE`, load the previous benchmark and calculate deltas:
-   ```bash
-   python3 scripts/compare-benchmarks.py \
-     /tmp/baseline.json \
-     /tmp/current.json \
-     --format delta
-   ```
+9. If the user provided `--compare FILE`, load the previous benchmark JSON and compute deltas manually:
+   - Load both JSON files
+   - Calculate per-dimension score differences
+   - Calculate composite and pass rate deltas
+   - Display with ✓ (improved), ═ (unchanged), ✗ (regressed) markers
 
 10. Present the benchmark report:
 

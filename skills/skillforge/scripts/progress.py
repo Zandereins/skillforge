@@ -688,6 +688,14 @@ class ProgressAnalyzer:
             weakest = max(gaps.items(), key=lambda x: x[1]["gap"])
             weakest_bucket = weakest[1]["bucket"]
 
+        # Cap strategy log at 10MB
+        try:
+            if meta_path.exists() and meta_path.stat().st_size > 10_485_760:
+                lines = meta_path.read_text(encoding="utf-8").splitlines()
+                meta_path.write_text("\n".join(lines[-500:]) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+
         with open(meta_path, "a", encoding="utf-8") as f:
             for exp in exps:
                 if exp.get("status") in ("baseline",):

@@ -9,8 +9,8 @@ git clone https://github.com/Zandereins/skillforge.git
 cd skillforge/skills/skillforge
 
 # Run the test suite
-bash scripts/test-integration.sh    # 51 tests
-bash scripts/test-self.sh           # 12 self-tests
+bash scripts/test-integration.sh
+bash scripts/test-self.sh
 
 # Score the skill
 python3 scripts/score-skill.py SKILL.md --json
@@ -31,8 +31,8 @@ results from using SkillForge on your own skills.
 4. Run the full test suite:
    ```bash
    cd skills/skillforge
-   bash scripts/test-integration.sh   # Must pass all 51+ tests
-   bash scripts/test-self.sh          # Must pass all 12+ tests
+   bash scripts/test-integration.sh   # Must pass all tests
+   bash scripts/test-self.sh          # Must pass all tests
    python3 scripts/score-skill.py SKILL.md --json  # Composite must be >= 90
    ```
 5. Open a PR with a clear description

@@ -719,11 +719,12 @@ For a well-tuned skill (target: all dimensions 90+):
   "dimensions": ["structure", "triggers", "quality", "edges", "efficiency", "composability"],
   "dimension_weights": {
     "structure": 0.15,
-    "triggers": 0.25,
-    "quality": 0.25,
+    "triggers": 0.20,
+    "quality": 0.20,
     "edges": 0.15,
     "efficiency": 0.10,
-    "composability": 0.10
+    "composability": 0.05,
+    "runtime": 0.15
   }
 }
 ```

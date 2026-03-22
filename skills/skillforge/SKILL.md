@@ -126,9 +126,9 @@ See `references/metrics-catalog.md#custom` for setup and examples.
 | `/skillforge:eval` | Run eval suite, show results |
 | `/skillforge:report` | Generate improvement summary + diffs |
 | `/skillforge:mesh` | Scan all skills for trigger overlap, broken handoffs, scope collisions |
-| `/skillforge:mesh-evolve` | Mesh + generate fix actions (negative boundaries, stubs) |
-| `/skillforge:predict` | Predict best strategy before trying (from cross-session data) |
-| `/skillforge:recall` | Recall relevant past episodes from episodic memory |
+| `/skillforge:mesh-evolve` | Mesh + generate fix actions (negative boundaries, stubs) (planned) |
+| `/skillforge:predict` | Predict best strategy before trying (from cross-session data) (planned) |
+| `/skillforge:recall` | Recall relevant past episodes from episodic memory (planned) |
 | `/skillforge:triage` | Cluster logged failures, auto-generate fixes |
 | `/skillforge:log-failure` | Manually log a skill failure for later triage |
 
@@ -188,7 +188,7 @@ Run `/skillforge:analyze` without a GOAL. SkillForge will:
 
 Use discovery mode when the user says "my skill needs work" without specifying what.
 
-## Parallel Experimentation (Try 3, Keep Best) — Planned
+## Parallel Experimentation (Try 3, Keep Best)
 
 For iterations where multiple plausible changes exist:
 1. Create 3 candidate changes on separate git branches using `git worktree`.

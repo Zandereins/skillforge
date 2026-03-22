@@ -70,9 +70,9 @@ tracks binary assertion success independently.
 
 Read the SKILL.md to extract the skill name and location.
 
-Look for `skillforge-evals.json` (or `eval-suite-*.json`) in the skill directory:
+Look for `eval-suite.json` in the skill directory:
 ```bash
-ls <skill_dir>/eval-suite*.json  # or skillforge-evals.json
+ls <skill_dir>/eval-suite.json
 ```
 
 If no eval suite exists, offer to generate one from the template:

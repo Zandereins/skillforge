@@ -33,6 +33,45 @@ from typing import Any, Optional
 
 SCRIPT_DIR = Path(__file__).parent
 
+# --- Security: Command validation for autonomous execution ---
+_COMMAND_BLOCKLIST_PATTERNS = [
+    r'\brm\s+(-[a-zA-Z]*[rRf])', r'\bcurl\b', r'\bwget\b', r'\bnc\b', r'\bncat\b',
+    r'\bchmod\b', r'\bchown\b', r'\bdd\b', r'\bmkfs\b', r'\bsudo\b',
+    r'`[^`]+`',  # backtick execution
+    r'\|\s*(ba)?sh\b', r'\|\s*zsh\b',  # pipe to shell
+    r'>\s*/dev/', r'>\s*/etc/', r'>\s*/tmp/',  # write to system dirs
+    r'\beval\b', r'\bexec\b',
+]
+_COMMAND_BLOCKLIST_RE = [re.compile(p) for p in _COMMAND_BLOCKLIST_PATTERNS]
+
+_COMMAND_ALLOWLIST_PREFIXES = (
+    'python3 ', 'python ', 'bash scripts/', 'node ', 'grep ', 'wc ', 'jq ',
+    'cat ', 'head ', 'tail ', 'sort ', 'uniq ', 'diff ', 'git ',
+    'bash scripts/', 'sh scripts/',
+)
+
+
+def validate_command_safety(cmd: str) -> tuple[bool, str]:
+    """Validate a command is safe to run in autonomous mode.
+
+    Returns (is_safe, reason).
+    """
+    cmd_stripped = cmd.strip()
+    if not cmd_stripped:
+        return False, "empty command"
+
+    # Check allowlist FIRST (prevents false positives like "run-eval.sh" matching \beval\b)
+    for prefix in _COMMAND_ALLOWLIST_PREFIXES:
+        if cmd_stripped.startswith(prefix):
+            return True, "allowed prefix"
+
+    # Check blocklist
+    for pattern in _COMMAND_BLOCKLIST_RE:
+        if pattern.search(cmd_stripped):
+            return False, f"blocked pattern: {pattern.pattern}"
+
+    return False, "command does not match any allowed prefix"
+
 
 def _sparkline(values: list[float]) -> str:
     """Render a sparkline from a list of values using Unicode block characters."""
@@ -45,18 +84,7 @@ def _sparkline(values: list[float]) -> str:
 
 
 # Import terminal_art for grade system
-try:
-    from terminal_art import score_to_grade, grade_colored, progress_bar
-except ImportError:
-    def score_to_grade(s: float) -> str:
-        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
-            if s >= t: return g
-        return "F"
-    def grade_colored(g: str) -> str:
-        return f"[{g}]"
-    def progress_bar(score, width=20):
-        filled = int(score / 100 * width)
-        return "\u2588" * filled + "\u2591" * (width - filled)
+from terminal_art import score_to_grade, grade_colored, progress_bar
 
 # --- Imports from sibling modules ---
 
@@ -121,6 +149,13 @@ def _load_state(skill_path: str) -> list[dict]:
             if removed:
                 backup_path = Path.home() / ".skillforge" / "state-backup.jsonl"
                 backup_path.parent.mkdir(parents=True, exist_ok=True)
+                # Cap state-backup at 10MB
+                try:
+                    if backup_path.exists() and backup_path.stat().st_size > 10_485_760:
+                        blines = backup_path.read_text(encoding="utf-8").splitlines()
+                        backup_path.write_text("\n".join(blines[-500:]) + "\n", encoding="utf-8")
+                except OSError:
+                    pass
                 with open(backup_path, "a", encoding="utf-8") as bf:
                     for rline in removed:
                         bf.write(rline + "\n")

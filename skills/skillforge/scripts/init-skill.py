@@ -31,20 +31,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 # Import terminal_art for grade system and score cards
-try:
-    from terminal_art import score_to_grade, grade_colored, colored_bar, _is_color_tty
-except ImportError:
-    def score_to_grade(s: float) -> str:
-        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
-            if s >= t: return g
-        return "F"
-    def grade_colored(g: str) -> str:
-        return f"[{g}]"
-    def colored_bar(s: float, bar_w: int = 10) -> str:
-        filled = min(bar_w, int(round(s / 100 * bar_w)))
-        return "\u2588" * filled + "\u2591" * (bar_w - filled)
-    def _is_color_tty() -> bool:
-        return False
+from terminal_art import score_to_grade, grade_colored, colored_bar, _is_color_tty
 
 # Action verb phrases extracted from imperative sentences in descriptions
 _ACTION_VERBS = [

@@ -1,6 +1,6 @@
 {
   "skill_name": "skillforge",
-  "version": "3.0.0",
+  "version": "5.1.0",
   "created_by": "skillforge",
   "triggers": [
     {
@@ -289,6 +289,27 @@
       "should_trigger": true,
       "category": "edge",
       "notes": "Eval-suite + trigger-pass-rate context implies SkillForge analysis"
+    },
+    {
+      "id": "pos-mesh",
+      "prompt": "check if my skills are conflicting with each other",
+      "should_trigger": true,
+      "category": "positive",
+      "notes": "mesh/conflict detection request"
+    },
+    {
+      "id": "pos-triage",
+      "prompt": "cluster my logged failures and generate fixes for the top issues",
+      "should_trigger": true,
+      "category": "positive",
+      "notes": "failure triage request"
+    },
+    {
+      "id": "neg-mesh-false",
+      "prompt": "optimize my database queries for better performance",
+      "should_trigger": false,
+      "category": "negative",
+      "notes": "performance optimization, not skill mesh analysis"
     }
   ],
   "test_cases": [

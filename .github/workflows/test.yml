@@ -38,4 +38,8 @@ jobs:
 
       - name: Run eval suite
         working-directory: skills/skillforge
-        run: bash scripts/run-eval.sh SKILL.md eval-suite.json --no-runtime-auto 2>/dev/null || true
+        run: bash scripts/run-eval.sh SKILL.md eval-suite.json --no-runtime-auto 2>/dev/null
+
+      - name: Run proof test
+        working-directory: skills/skillforge
+        run: bash tests/proof/test-proof.sh

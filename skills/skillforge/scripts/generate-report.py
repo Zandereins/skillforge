@@ -23,14 +23,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 # Import terminal_art for grade system and heatmap
-try:
-    from terminal_art import score_to_grade, render_heatmap
-except ImportError:
-    def score_to_grade(s: float) -> str:
-        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
-            if s >= t: return g
-        return "F"
-    render_heatmap = None
+from terminal_art import score_to_grade, render_heatmap
 
 # Optional: achievements
 try:
@@ -117,14 +110,7 @@ def load_progress(results_path: str) -> dict[str, Any]:
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-try:
-    from terminal_art import progress_bar as render_progress_bar
-except ImportError:
-    def render_progress_bar(score: float, width: int = 20) -> str:
-        """Return an ASCII progress bar like: ████████████░░░░░░░░."""
-        filled = min(width, int(round(score / 100 * width)))
-        empty = width - filled
-        return "\u2588" * filled + "\u2591" * empty
+from terminal_art import progress_bar as render_progress_bar
 
 
 def _load_jsonl_entries(path: str) -> list[dict]:
@@ -539,7 +525,7 @@ def main() -> None:
 
     skill_path = Path(args.skill_path)
     if not skill_path.exists():
-        print(f"Error: skill file not found: {args.skill_path}", file=sys.stderr)
+        print(f"Error: skill file not found: {Path(args.skill_path).name}", file=sys.stderr)
         sys.exit(1)
 
     progress = load_progress(args.results_path)

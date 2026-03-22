@@ -46,15 +46,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 # Import terminal_art for grade system
-try:
-    from terminal_art import score_to_grade, grade_colored
-except ImportError:
-    def score_to_grade(s: float) -> str:
-        for t, g in [(95,"S"),(85,"A"),(75,"B"),(65,"C"),(50,"D")]:
-            if s >= t: return g
-        return "F"
-    def grade_colored(g: str) -> str:
-        return f"[{g}]"
+from terminal_art import score_to_grade, grade_colored
 
 
 def _try_import(module_name: str):

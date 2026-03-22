@@ -103,12 +103,12 @@ fi
 
 # --- Validate inputs ---
 if [[ ! -f "$SKILL_MD" ]]; then
-    jq -n --arg path "$SKILL_MD" '{"error": "SKILL.md not found", "path": $path}'
+    jq -n --arg path "$(basename "$SKILL_MD")" '{"error": "SKILL.md not found", "path": $path}'
     exit 1
 fi
 
 if [[ ! -f "$EVAL_SUITE" ]]; then
-    jq -n --arg path "$EVAL_SUITE" '{"error": "eval-suite not found", "path": $path}'
+    jq -n --arg path "$(basename "$EVAL_SUITE")" '{"error": "eval-suite not found", "path": $path}'
     exit 1
 fi
 
@@ -211,6 +211,14 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
         # Collect results as JSONL lines (one per assertion), build array at end
         RESULTS_LINES=$(mktemp)
 
+        # Pre-resolve timeout command (once, not per-assertion)
+        _GREP_TIMEOUT=""
+        if command -v gtimeout &>/dev/null; then
+            _GREP_TIMEOUT="gtimeout 2"
+        elif command -v timeout &>/dev/null; then
+            _GREP_TIMEOUT="timeout 2"
+        fi
+
         while IFS= read -r -d '' assertion_block; do
             tc_id=$(printf '%s' "$assertion_block" | sed -n '1p')
             assertion_type=$(printf '%s' "$assertion_block" | sed -n '2p')
@@ -239,13 +247,6 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
                     ;;
                 pattern)
                     # Timeout guard against ReDoS from eval-suite patterns
-                    if command -v gtimeout &>/dev/null; then
-                        _GREP_TIMEOUT="gtimeout 2"
-                    elif command -v timeout &>/dev/null; then
-                        _GREP_TIMEOUT="timeout 2"
-                    else
-                        _GREP_TIMEOUT=""
-                    fi
                     if echo "$SKILL_CONTENT" | $_GREP_TIMEOUT grep -qiE -- "$assertion_value" 2>/dev/null; then
                         assertion_passed="true"
                     fi
@@ -341,9 +342,10 @@ fi
 
 # --- Build JSON output ---
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+SKILL_BASENAME=$(basename "$SKILL_MD")
 RESULT_JSON=$(jq -n \
     --arg skill_name "$SKILL_NAME" \
-    --arg skill_path "$SKILL_MD" \
+    --arg skill_path "$SKILL_BASENAME" \
     --argjson experiment_id "$EXPERIMENT_ID" \
     --arg timestamp "$TIMESTAMP" \
     --argjson pass_rate "$PASS_RATE" \
@@ -372,6 +374,12 @@ RESULT_JSON=$(jq -n \
 # --- Emit calibration data to meta-learning store ---
 META_DIR="${HOME}/.skillforge/meta"
 mkdir -p "$META_DIR"
+
+# Cap calibration log at 10MB
+_CAL_LOG="${META_DIR}/calibration-log.jsonl"
+if [ -f "$_CAL_LOG" ] && [ "$(wc -c < "$_CAL_LOG" 2>/dev/null || echo 0)" -gt 10485760 ]; then
+    tail -n 500 "$_CAL_LOG" > "${_CAL_LOG}.tmp" && mv "${_CAL_LOG}.tmp" "$_CAL_LOG"
+fi
 
 # Calibration log: static scores + runtime pass rate (when runtime was used)
 if [[ $RUNTIME_EVAL -eq 1 ]] && [[ "$RUNTIME_RESULTS" != "{}" ]]; then
@@ -438,8 +446,16 @@ if [[ -n "$RESULTS_LOG" ]]; then
     LOG_DELTA=0
     if [[ -f "$RESULTS_LOG" ]] && [[ -s "$RESULTS_LOG" ]]; then
         PREV_COMPOSITE=$(tail -1 "$RESULTS_LOG" | jq -r '.composite // 0' 2>/dev/null || echo "0")
-        LOG_DELTA=$(python3 -c "import sys; print(round(float(sys.argv[1]) - float(sys.argv[2]), 1))" "$COMPOSITE_SCORE" "$PREV_COMPOSITE" 2>/dev/null || echo "0")
-        if python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) > float(sys.argv[2]) else 1)" "$COMPOSITE_SCORE" "$PREV_COMPOSITE" 2>/dev/null; then
+        _ARITH_RESULT=$(python3 -c "
+import sys
+a, b = float(sys.argv[1]), float(sys.argv[2])
+delta = round(a - b, 1)
+verdict = 'keep' if a > b else 'discard'
+print(f'{delta}:{verdict}')
+" "$COMPOSITE_SCORE" "$PREV_COMPOSITE" 2>/dev/null || echo "0.0:discard")
+        LOG_DELTA="${_ARITH_RESULT%%:*}"
+        _VERDICT="${_ARITH_RESULT##*:}"
+        if [[ "$_VERDICT" == "keep" ]]; then
             LOG_STATUS="keep"
         else
             LOG_STATUS="discard"

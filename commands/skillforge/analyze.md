@@ -18,7 +18,7 @@ Perform a comprehensive analysis of a skill and identify top improvements.
 
 2. Check if an eval suite exists. If not, suggest initialization:
    ```
-   No eval suite found at skillforge-evals.json.
+   No eval suite found at eval-suite.json.
    Run /skillforge:init first to auto-generate one, then I can give you detailed metrics.
    For now, I'll do structural analysis only.
    ```
@@ -40,16 +40,16 @@ Perform a comprehensive analysis of a skill and identify top improvements.
    ```bash
    python3 scripts/score-skill.py \
      /path/to/SKILL.md \
-     --eval-suite /path/to/skill/skillforge-evals.json \
+     --eval-suite /path/to/skill/eval-suite.json \
      --json
    ```
 
 7. If eval suite exists, run assertion checks:
    ```bash
-   python3 scripts/eval-assertions.py \
+   bash scripts/run-eval.sh \
      /path/to/SKILL.md \
-     --eval-suite /path/to/skill/skillforge-evals.json \
-     --json
+     --eval-suite /path/to/skill/eval-suite.json \
+     --no-runtime-auto
    ```
 
 8. Score each dimension manually for nuance:
@@ -177,7 +177,7 @@ Perform a comprehensive analysis of a skill and identify top improvements.
 
 ## Notes
 
-- Composite score is a weighted average: 15% structure + 20% triggers + 25% quality + 15% edges + 15% efficiency + 10% composability.
+- Composite score is a weighted average: 15% structure + 20% triggers + 20% quality + 15% edges + 10% efficiency + 5% composability + 15% runtime (when enabled). Without runtime, weights are renormalized across the 6 static dimensions.
 - Pass rate is the binary result: X assertions passing out of Y total (requires eval suite).
 - If no eval suite exists, dimension scores are estimates based on manual review.
 - Improvements are ranked by composite impact: (dimension_gap) × (dimension_weight).

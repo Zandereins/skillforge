@@ -17,21 +17,26 @@ const MIN_UNTRIAGED = 3;
 const MAX_FIELD_LEN = 120; // Sanitize fields to prevent prompt injection
 
 function sanitize(value) {
-  return String(value || "")
-    .replace(/[\x00-\x1f\x7f]/g, " ") // ASCII control chars
-    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\u00AD]/g, "") // Unicode bidi, zero-width, and invisible chars
-    .slice(0, MAX_FIELD_LEN);
+  return (
+    String(value || "")
+      .replace(/[\x00-\x1f\x7f]/g, " ") // ASCII control chars
+      .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\u00AD]/g, "") // Unicode bidi, zero-width, and invisible chars
+      // Strip XML-like tags and prompt injection markers
+      .replace(/<\/?[a-zA-Z][^>]*>/g, "")
+      .replace(/\b(Human|Assistant|System)\s*:/gi, "")
+      .replace(/<\/?system[^>]*>/gi, "")
+      .slice(0, MAX_FIELD_LEN)
+  );
 }
 
-function stripProto(obj) {
-  if (obj == null || typeof obj !== "object") return obj;
-  delete obj.__proto__;
-  delete obj.constructor;
-  delete obj.prototype;
-  for (const key of Object.keys(obj)) {
-    if (typeof obj[key] === "object" && obj[key] !== null) {
-      stripProto(obj[key]);
-    }
+function stripProto(obj, depth = 0) {
+  if (depth > 10 || obj === null || typeof obj !== "object") return obj;
+  delete obj["__proto__"];
+  delete obj["constructor"];
+  delete obj["prototype"];
+  for (const k of Object.keys(obj)) {
+    if (typeof obj[k] === "object" && obj[k] !== null)
+      stripProto(obj[k], depth + 1);
   }
   return obj;
 }

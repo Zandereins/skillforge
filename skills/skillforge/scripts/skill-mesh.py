@@ -73,7 +73,7 @@ def discover_skills(skill_dirs: list[str]) -> list[dict]:
             seen_paths.add(real_path)
 
             try:
-                content = skill_md.read_text(encoding="utf-8", errors="replace")
+                content = resolved.read_text(encoding="utf-8", errors="replace")
             except (OSError, PermissionError):
                 continue
 
@@ -256,7 +256,7 @@ def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
     vectors, _ = _compute_tfidf_vectors(skills)
 
     # Fallback: brute-force for small skill sets (LSH overhead not worth it)
-    if len(skills) < 200:
+    if len(skills) < 50:
         return _detect_overlaps_bruteforce(skills, vectors)
 
     # MinHash + LSH path for large skill sets
