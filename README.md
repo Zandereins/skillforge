@@ -7,7 +7,7 @@ Stop manually auditing your Claude Code skills.
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests: 99/99](https://img.shields.io/badge/Tests-99%2F99_passing-brightgreen)](skills/skillforge/scripts/test-integration.sh)
 [![Structural Score: 99.9](https://img.shields.io/badge/Structural_Score-99.9%2F100-blue)](skills/skillforge/scripts/score-skill.py)
-[![v5.1](https://img.shields.io/badge/Version-5.1-F59E0B)](CHANGELOG.md)
+[![v5.1.1](https://img.shields.io/badge/Version-5.1.1-F59E0B)](CHANGELOG.md)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-8A2BE2)](https://docs.anthropic.com/en/docs/claude-code/skills)
 
 ---
@@ -32,6 +32,71 @@ What changed:
 ```
 
 Unlike code linters, SkillForge improves skills via multi-dimensional eval suites, automatic patch generation, and cross-session learning.
+
+<details>
+<summary><b>Dashboard</b> — Health overview for any skill</summary>
+
+```
+======================================================================
+  SkillForge Health Dashboard: skillforge
+======================================================================
+
+  Structural Score: ████████████████████  99.9/100  [S]
+    [7/8 dimensions, 91% coverage]
+
+  Dimensions:
+    structure       ██████████  100/100
+    triggers        ██████████  100/100
+    quality         ██████████  100/100
+    edges           ██████████  100/100
+    efficiency      █████████░  93/100
+    composability   ██████████  100/100
+    clarity         ██████████  100/100
+======================================================================
+```
+</details>
+
+<details>
+<summary><b>Auto-Improve</b> — Autonomous grinding with EMA-based stopping</summary>
+
+```
+Scoring baseline...
+Baseline: 99.9/100 (6 dims)
+
+--- Iteration 1 ---
+Stopping: composite >= 98 (99.9)
+
+  SkillForge Auto-Improve Complete
+  ──────────────────────────────────────────────────
+  Score:  100 → 100/100  ████████████████████  (+0.0)  [S]
+  Iters:  0  |  Kept: 0  |  Time: 0s
+  Stop:   composite >= 98 (99.9)
+  (dry run — no changes written)
+```
+</details>
+
+<details>
+<summary><b>Doctor</b> — Scan all installed skills at once</summary>
+
+```
+======================================================================
+  SkillForge Doctor — Skill Health Check
+======================================================================
+
+  1 skills scanned | 1 healthy | 4 mesh issues
+
+  Skill                      Score  Grade   Dims  Issues  Action
+  --------------------------------------------------------------------
+  skillforge                  100    [S]    6/7       0  Healthy
+
+  Mesh Health: 68/100 (4 cross-skill issues)
+  Run /skillforge:mesh for details.
+
+  NOTE: Scores are STRUCTURAL — they measure file organization,
+  not runtime effectiveness. Use --runtime for validated scoring.
+======================================================================
+```
+</details>
 
 ---
 
@@ -78,6 +143,24 @@ Already have skills? Run `/skillforge:doctor` to see health grades for all your 
 **Learns** — Episodic memory remembers which strategies worked across sessions. Predicts success before trying. Your 50th skill improves faster than your 1st.
 
 **Scales** — MinHash + LSH mesh analysis detects trigger conflicts across 50+ skills in O(n). Doctor command shows health grades for your entire skill collection.
+
+---
+
+## What's New in v5.1
+
+| Feature | Description |
+|---------|-------------|
+| Honest Scoring | "Structural Score" label everywhere — transparent about what's measured |
+| Stemming Tokenizer | Suffix-stripping replaces fixed synonym tables |
+| Beam Search | Top-3 exploration instead of greedy top-1 from iteration 4 |
+| EMA Plateau Detection | Exponential Moving Average replaces fixed-window ROI |
+| MinHash + LSH | O(n) mesh analysis instead of O(n^2) for 50+ skills |
+| Context-aware Patches | Generates meaningful descriptions instead of TODOs |
+| Doctor Command | `skillforge doctor` scans ALL installed skills |
+| Dimension Guard | Prevents patches that tank a dimension by >15pt |
+| Coherence Check | Instruction-assertion alignment as quality bonus |
+| 40+ Pre-compiled Regex | Performance optimization across the scorer |
+| Public Cache API | `invalidate_cache()` replaces direct `_file_cache.pop()` |
 
 ---
 
@@ -141,7 +224,7 @@ SkillForge scores itself. Dogfooding, not marketing.
 | Tests | **99/99 passing** (87 integration + 12 self) |
 | Code review | **3 CRITICAL + 9 HIGH fixed** in v5.1.1 |
 | Security | 27 + 12 fixes from multi-agent audits |
-| Journey | v1.0 (62.5) → v5.1 (99.9) across 5 major versions |
+| Journey | v1.0 (62.5) → v5.1.1 (99.9) across 5 major versions |
 
 ---
 

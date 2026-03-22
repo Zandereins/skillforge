@@ -15,13 +15,13 @@
     clarity         ██████████  100/100
 
   Mesh Issues (4):
-    [WARNING] Broken ref: 'community'
-    [WARNING] Broken ref: 'systematic-debugging'
-    [WARNING] Broken ref: 'progress'
     [WARNING] Broken ref: 'scripts'
+    [WARNING] Broken ref: 'community'
+    [WARNING] Broken ref: 'progress'
+    [WARNING] Broken ref: 'systematic-debugging'
 
-  Untriaged Failures: 87
-    - assertion_failed: 87
+  Untriaged Failures: 131
+    - assertion_failed: 131
   Run /skillforge:triage to investigate.
 
   Achievements: ████░░░░░░  4/10

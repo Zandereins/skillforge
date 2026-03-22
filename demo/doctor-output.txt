@@ -6,7 +6,7 @@
 
   Skill                      Score  Grade   Dims  Issues  Action
   --------------------------------------------------------------------
-  skillforge                   99    [S]    6/7       1  Healthy — consider runtime eval for
+  skillforge                  100    [S]    6/7       0  Healthy — consider runtime eval for
 
   Mesh Health: 68/100 (4 cross-skill issues)
   Run /skillforge:mesh for details.
