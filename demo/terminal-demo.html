@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkillForge — Auto-Improve Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #010409;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: monospace;
+  }
+  .terminal-wrapper {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(16,185,129,0.08);
+    border: 1px solid #21262d;
+  }
+  .titlebar {
+    background: #161b22;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+    border-bottom: 1px solid #21262d;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #febc2e; }
+  .dot-green { background: #28c840; }
+  .titlebar-text {
+    color: #8b949e;
+    font-size: 12px;
+    margin-left: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, monospace;
+  }
+  .terminal {
+    width: 800px;
+    height: 500px;
+    background: #0d1117;
+    padding: 16px;
+    overflow: hidden;
+    position: relative;
+  }
+  #output {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #c9d1d9;
+    white-space: pre;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+  }
+  .prompt { color: #3fb950; }
+  .cmd { color: #e6edf3; font-weight: bold; }
+  .dim { color: #8b949e; }
+  .green { color: #3fb950; }
+  .brightgreen { color: #10b981; }
+  .yellow { color: #eab308; }
+  .yellowgreen { color: #a3e635; }
+  .red { color: #ef4444; }
+  .white { color: #e6edf3; }
+  .cyan { color: #58a6ff; }
+  .bold { font-weight: bold; }
+  .grade-D { color: #ef4444; font-weight: bold; }
+  .grade-C { color: #eab308; font-weight: bold; }
+  .grade-B { color: #a3e635; font-weight: bold; }
+  .grade-A { color: #22c55e; font-weight: bold; }
+  .grade-S { color: #10b981; font-weight: bold; }
+  .bar-fill { color: #3fb950; }
+  .bar-empty { color: #21262d; }
+  .cursor-blink {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: #3fb950;
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+  .separator { color: #30363d; }
+</style>
+</head>
+<body>
+<div class="terminal-wrapper">
+  <div class="titlebar">
+    <div class="dot dot-red"></div>
+    <div class="dot dot-yellow"></div>
+    <div class="dot dot-green"></div>
+    <span class="titlebar-text">skillforge — zsh — 800x500</span>
+  </div>
+  <div class="terminal">
+    <div id="output"></div>
+  </div>
+</div>
+<script>
+// SkillForge Terminal Demo — self-contained, no external dependencies
+// All content is static/hardcoded. DOM manipulation uses only trusted static strings.
+(function() {
+  var output = document.getElementById('output');
+  var MAX_LINES = 28;
+  var linesBuffer = [];
+  var running = true;
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Build progress bar as array of DOM elements
+  function makeBar(filled, total, width) {
+    var fw = Math.round((filled / total) * width);
+    var ew = width - fw;
+    var container = document.createDocumentFragment();
+    var fillSpan = document.createElement('span');
+    fillSpan.className = 'bar-fill';
+    fillSpan.textContent = '\u2588'.repeat(fw);
+    var emptySpan = document.createElement('span');
+    emptySpan.className = 'bar-empty';
+    emptySpan.textContent = '\u2591'.repeat(ew);
+    container.appendChild(fillSpan);
+    container.appendChild(emptySpan);
+    return container;
+  }
+
+  // Create a span element with class and text
+  function makeSpan(cls, text) {
+    var el = document.createElement('span');
+    el.className = cls;
+    el.textContent = text;
+    return el;
+  }
+
+  // Build a line as a DocumentFragment from a descriptor array
+  // Each descriptor: { cls: 'className', text: 'content' } or { bar: [filled, total, width] }
+  function buildLine(parts) {
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (p.bar) {
+        frag.appendChild(makeBar(p.bar[0], p.bar[1], p.bar[2]));
+      } else {
+        frag.appendChild(makeSpan(p.cls || '', p.text || ''));
+      }
+    }
+    return frag;
+  }
+
+  // Serialize a line fragment to HTML string (for buffer storage)
+  function fragToHtml(frag) {
+    var tmp = document.createElement('div');
+    tmp.appendChild(frag.cloneNode(true));
+    return tmp.innerHTML;
+  }
+
+  function renderBuffer(extraHtml) {
+    var visible = linesBuffer.slice(-MAX_LINES);
+    // Safe: all HTML in linesBuffer was built via DOM methods then serialized
+    output.innerHTML = visible.join('\n') + (extraHtml || '');
+  }
+
+  function pushLine(parts) {
+    var frag = buildLine(parts);
+    linesBuffer.push(fragToHtml(frag));
+    renderBuffer();
+  }
+
+  function pushEmpty() {
+    linesBuffer.push('');
+    renderBuffer();
+  }
+
+  function sleep(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
+  function randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  // Type a command character by character
+  async function typeCommand(promptText, cmdText, charDelayMin, charDelayMax) {
+    linesBuffer.push('');
+    var lineIdx = linesBuffer.length - 1;
+
+    for (var i = 0; i <= cmdText.length; i++) {
+      var frag = document.createDocumentFragment();
+      frag.appendChild(makeSpan('prompt', promptText));
+      frag.appendChild(makeSpan('cmd', cmdText.substring(0, i)));
+      var cursor = document.createElement('span');
+      cursor.className = 'cursor-blink';
+      cursor.textContent = '';
+      frag.appendChild(cursor);
+      linesBuffer[lineIdx] = fragToHtml(frag);
+      renderBuffer();
+      if (i < cmdText.length) {
+        await sleep(randInt(charDelayMin, charDelayMax));
+      }
+    }
+    // Final without cursor
+    var finalFrag = document.createDocumentFragment();
+    finalFrag.appendChild(makeSpan('prompt', promptText));
+    finalFrag.appendChild(makeSpan('cmd', cmdText));
+    linesBuffer[lineIdx] = fragToHtml(finalFrag);
+    renderBuffer();
+  }
+
+  // Define all scenes using safe part descriptors
+  async function runScene1() {
+    // Command
+    await typeCommand('$ ', '/skillforge:init demo/bad-skill/SKILL.md', 30, 70);
+    await sleep(600);
+    pushEmpty();
+    pushLine([{cls:'brightgreen bold', text:'SkillForge Init: '}, {cls:'white', text:'deploy-helper'}]);
+    await sleep(80);
+    pushLine([{cls:'separator', text:'================================'}]);
+    await sleep(80);
+    pushEmpty();
+    await sleep(200);
+    pushLine([{cls:'dim', text:'Baseline Score: '}, {cls:'grade-D', text:'56.9/100  [D]'}]);
+    await sleep(400);
+    pushEmpty();
+    await sleep(200);
+
+    // Dimension bars
+    var dims = [
+      ['structure    ', 75, 100, '75/100', 'white'],
+      ['triggers     ', 0, 100, ' 0/100', 'red'],
+      ['quality      ', 0, 100, ' 0/100', 'red'],
+      ['edges        ', 0, 100, ' 0/100', 'red'],
+      ['efficiency   ', 35, 100, '35/100', 'yellow'],
+      ['composability', 40, 100, '40/100', 'yellow'],
+    ];
+    for (var d = 0; d < dims.length; d++) {
+      pushLine([
+        {cls:'', text:'  '},
+        {cls:'dim', text:dims[d][0]},
+        {cls:'', text:'   '},
+        {bar: [dims[d][1], dims[d][2], 10]},
+        {cls:'', text:'  '},
+        {cls:dims[d][4], text:dims[d][3]},
+      ]);
+      await sleep(200);
+    }
+    await sleep(400);
+  }
+
+  async function runScene2() {
+    await sleep(1500);
+    pushEmpty();
+    await typeCommand('$ ', '/skillforge:auto', 30, 65);
+    await sleep(600);
+    pushEmpty();
+    await sleep(400);
+    pushLine([{cls:'dim', text:'Scoring baseline...'}]);
+    await sleep(400);
+    pushLine([{cls:'dim', text:'Baseline: '}, {cls:'grade-D', text:'56.9/100'}, {cls:'dim', text:' (3 dims)'}]);
+    await sleep(600);
+    pushEmpty();
+    await sleep(300);
+
+    // Iterations
+    var iters = [
+      {n:1,  dim:'triggers',      delta:'+15.0', desc:'Added trigger keywords',     from:'56.9', to:'68.2', pct:68,  grade:'C'},
+      {n:3,  dim:'structure',     delta:'+8.0',  desc:'Added examples section',     from:'68.2', to:'78.4', pct:78,  grade:'B'},
+      {n:7,  dim:'quality',       delta:'+12.0', desc:'Generated eval assertions',  from:'78.4', to:'88.9', pct:89,  grade:'A'},
+      {n:12, dim:'efficiency',    delta:'+5.2',  desc:'Removed hedging language',   from:'88.9', to:'95.1', pct:95,  grade:'S'},
+      {n:18, dim:'composability', delta:'+4.8',  desc:'Added scope boundaries',     from:'95.1', to:'99.9', pct:100, grade:'S'},
+    ];
+
+    for (var it = 0; it < iters.length; it++) {
+      var cur = iters[it];
+      pushLine([{cls:'separator', text:'--- Iteration ' + cur.n + ' ---'}]);
+      await sleep(300);
+      pushLine([
+        {cls:'', text:'  '},
+        {cls:'cyan', text:'[' + cur.dim + ']'},
+        {cls:'', text:' '},
+        {cls:'green', text:cur.delta},
+        {cls:'', text:'  '},
+        {cls:'dim', text:cur.desc},
+      ]);
+      await sleep(250);
+      pushLine([
+        {cls:'', text:'  '},
+        {cls:'dim', text:'Score: '},
+        {cls:'white', text:cur.from},
+        {cls:'dim', text:' \u2192 '},
+        {cls:'grade-' + cur.grade, text:cur.to},
+        {cls:'', text:'  '},
+        {bar: [cur.pct, 100, 20]},
+        {cls:'', text:'  '},
+        {cls:'grade-' + cur.grade, text:'[' + cur.grade + ']'},
+        {cls:'', text:'  '},
+        {cls:'green bold', text:'KEEP'},
+      ]);
+      await sleep(500);
+      if (it < iters.length - 1) {
+        pushEmpty();
+        await sleep(300);
+      }
+    }
+    await sleep(300);
+  }
+
+  async function runScene3() {
+    await sleep(800);
+    pushEmpty();
+    pushLine([{cls:'brightgreen bold', text:'  SkillForge Auto-Improve Complete'}]);
+    await sleep(100);
+    pushLine([{cls:'separator', text:'  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}]);
+    await sleep(100);
+    pushLine([
+      {cls:'dim', text:'  Score:  '},
+      {cls:'red', text:'57'},
+      {cls:'dim', text:' \u2192 '},
+      {cls:'grade-S', text:'99.9/100'},
+      {cls:'', text:'  '},
+      {bar: [100, 100, 20]},
+      {cls:'', text:'  '},
+      {cls:'grade-S', text:'[S]'},
+    ]);
+    await sleep(200);
+    pushLine([
+      {cls:'dim', text:'  Iters:  '},
+      {cls:'white', text:'18'},
+      {cls:'dim', text:'  |  Kept: '},
+      {cls:'white', text:'5'},
+      {cls:'dim', text:'  |  Time: '},
+      {cls:'white', text:'34s'},
+    ]);
+    await sleep(200);
+    pushLine([{cls:'dim', text:'  Stop:   composite >= 98'}]);
+    await sleep(400);
+    pushEmpty();
+    await sleep(200);
+    pushLine([{cls:'brightgreen bold', text:'  Zero human input. Your skill, automatically better.'}]);
+    await sleep(300);
+  }
+
+  async function runScene4() {
+    await sleep(800);
+    pushEmpty();
+    pushLine([{cls:'grade-S', text:'  [\u2605 SkillForge: 99.9 [S]]'}]);
+    await sleep(400);
+    pushEmpty();
+    pushLine([{cls:'dim', text:'  \u2192 '}, {cls:'cyan', text:'github.com/Zandereins/skillforge'}]);
+    await sleep(3000);
+  }
+
+  async function runAnimation() {
+    linesBuffer = [];
+    output.textContent = '';
+    await runScene1();
+    await runScene2();
+    await runScene3();
+    await runScene4();
+  }
+
+  async function loop() {
+    while (running) {
+      await runAnimation();
+      await sleep(500);
+    }
+  }
+
+  loop();
+})();
+</script>
+</body>
+</html>
