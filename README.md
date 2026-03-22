@@ -16,7 +16,9 @@ Stop manually auditing your Claude Code skills.
 
 **A real skill going from [D] to [S] — zero human input:**
 
-[View the animated terminal demo](demo/terminal-demo.html)
+<p align="center">
+  <img src="demo/skillforge-demo.gif" alt="SkillForge improving a skill from 56.9 to 99.9" width="720">
+</p>
 
 ```
 Baseline:  ██████░░░░░░░░░░░░░░  56.9/100  [D]
