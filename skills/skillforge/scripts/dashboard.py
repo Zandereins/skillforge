@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """SkillForge Skill Health Dashboard — Unified Status View
 
-Combines score, gradients, mesh issues, strategy history, and untriaged
-failures into one report for a given skill.
+Combines structural score, gradients, mesh issues, strategy history, and
+untriaged failures into one report for a given skill.
+
+NOTE: The composite score is a STRUCTURAL score measuring file organization,
+not runtime effectiveness. Enable --runtime for validated scoring.
 
 Usage:
     python3 dashboard.py SKILL.md [--json] [--skill-dirs DIR...]
@@ -49,24 +52,24 @@ except ImportError:
     def grade_colored(g: str) -> str:
         return f"[{g}]"
 
-# Import sibling modules via importlib (hyphenated names)
+# Import sibling modules via underscore aliases (clean Python imports)
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-import importlib
 
 def _try_import(module_name: str):
-    """Import a hyphenated sibling module; return None on failure."""
+    """Import a sibling module; return None on failure."""
     try:
+        import importlib
         return importlib.import_module(module_name)
     except (ImportError, ModuleNotFoundError, SyntaxError) as e:
         print(f"Warning: module '{module_name}' unavailable — dashboard will show N/A for that section ({e})", file=sys.stderr)
         return None
 
-scorer = _try_import("score-skill")
-gradient_engine = _try_import("text-gradient")
-mesh_analyzer = _try_import("skill-mesh")
-meta_reporter = _try_import("meta-report")
+scorer = _try_import("score_skill")
+gradient_engine = _try_import("text_gradient")
+mesh_analyzer = _try_import("skill_mesh")
+meta_reporter = _try_import("meta_report")
 achievements_mod = _try_import("achievements")
 
 
@@ -188,10 +191,13 @@ def generate_dashboard(
         data["avg_delta"] = round(sum(data["deltas"]) / len(data["deltas"]), 2) if data["deltas"] else 0
         del data["deltas"]
 
+    score_type = composite.get("score_type", "structural")
+
     result = {
         "skill_name": skill_name,
         "skill_path": skill_path,
         "composite_score": composite["score"],
+        "score_type": score_type,
         "dimensions": {k: v["score"] for k, v in scores.items()},
         "top_gradients": [
             {"dimension": g["dimension"], "issue": g["issue"],
@@ -243,12 +249,14 @@ def format_dashboard(dashboard: dict) -> str:
     lines.append("=" * 70)
     lines.append("")
 
-    # Score with gauge + grade
+    # Score with gauge + grade + type indicator
     score = dashboard["composite_score"]
+    score_type = dashboard.get("score_type", "structural")
+    type_label = "Structural+Runtime" if "runtime" in score_type else "Structural"
     bar = _colored_bar(score, bar_w=20)
     grade = score_to_grade(score)
     grade_str = grade_colored(grade)
-    lines.append(f"  Composite: {bar}  {score}/100  {grade_str}")
+    lines.append(f"  {type_label} Score: {bar}  {score}/100  {grade_str}")
 
     conf = dashboard["confidence"]
     if conf["measured"] < conf["total"]:

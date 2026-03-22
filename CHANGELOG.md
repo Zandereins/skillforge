@@ -3,6 +3,27 @@
 All notable changes to SkillForge are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [5.1.0] - 2026-03-22
+
+### Added
+- **Honest Scoring** — "Structural Score" label everywhere, replacing misleading "Quality Score"
+- **Stemming Tokenizer** — suffix-stripping replaces fixed synonym tables for better keyword matching
+- **Beam Search** — top-3 exploration instead of greedy top-1 from iteration 4 onward
+- **EMA Plateau Detection** — Exponential Moving Average replaces fixed-window ROI stopping
+- **MinHash + LSH** — O(n) mesh analysis instead of O(n^2) for 50+ skills
+- **Context-aware Patches** — generates meaningful descriptions instead of TODOs
+- **Doctor Command** (`doctor.py`) — scans all installed skills, shows health summary with grades
+- **Dimension Guard** — prevents patches that tank a single dimension by >15 points
+- **Coherence Check** — instruction-assertion alignment as quality bonus
+- **40+ Pre-compiled Regex** — performance optimization across the scorer
+- **Public Cache API** — `invalidate_cache()` replaces direct `_file_cache.pop()`
+- **Underscore Alias Modules** — `score_skill.py`, `text_gradient.py`, `skill_mesh.py`, `parallel_runner.py` for Python import compatibility
+
+### Fixed
+- State truncation bug in auto-improve loop
+- EMA indexing off-by-one in plateau detection
+- Deterministic hash for MinHash reproducibility
+
 ## [5.0.0] - 2026-03-21
 
 ### Added — The Self-Driving Engine

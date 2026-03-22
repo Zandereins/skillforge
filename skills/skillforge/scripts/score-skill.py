@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""SkillForge — Skill Quality Scorer
+"""SkillForge — Skill Structural Scorer
 
-Computes a composite quality score across 6 dimensions.
+Computes a composite structural score across 6 dimensions.
 Used during the autonomous improvement loop to decide keep/discard.
+
+IMPORTANT: This is a STRUCTURAL score — it measures file organization,
+keyword coverage, and eval suite completeness. It does NOT measure whether
+the skill actually works correctly at runtime. For runtime validation,
+use the --runtime flag or run runtime-evaluator.py separately.
 
 Usage:
     python score-skill.py /path/to/SKILL.md [--eval-suite eval.json] [--json]
@@ -21,6 +26,146 @@ from collections import Counter
 from typing import Optional
 from pathlib import Path
 
+# --- Pre-compiled regex patterns (Change 3) ---
+# Used in score_structure()
+_RE_FRONTMATTER_NAME = re.compile(r"^name:\s*\S+", re.MULTILINE)
+_RE_FRONTMATTER_DESC = re.compile(r"^description:", re.MULTILINE)
+_RE_REAL_EXAMPLES = re.compile(
+    r"(?i)(example\s*[0-9:#]|input.*output|e\.g\.|for instance|for example)"
+)
+_RE_CODE_BLOCKS = re.compile(r"```")
+_RE_HEADERS = re.compile(r"^##\s", re.MULTILINE)
+_RE_HEDGING = re.compile(
+    r"you (might|could|should|may) (want to|consider|possibly)", re.IGNORECASE
+)
+_RE_REFS = re.compile(r"(references|scripts|templates)/[\w./-]+")
+_RE_TODO = re.compile(r"(?i)(TODO|FIXME|HACK|XXX|placeholder)")
+_RE_SECTION_HEADER = re.compile(r"^##\s")
+
+# Used in score_efficiency()
+_RE_ACTIONABLE_LINES = re.compile(
+    r"^(?:\d+\.\s*)?(?:Read|Run|Check|Create|Add|Remove|Move|Use|Set|"
+    r"Install|Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|"
+    r"Copy|Delete|Write|Edit|Update|Generate|Execute|Validate|Parse|"
+    r"Extract|Transform|Import|Export|Send|Fetch|Call|Return)\b",
+    re.MULTILINE,
+)
+_RE_WHY_COUNT = re.compile(
+    r"\b(because|since|this enables|this prevents|this means|the reason|"
+    r"this ensures|this avoids|otherwise|so that|why[:\s])\b",
+    re.IGNORECASE,
+)
+_RE_VERIFICATION_CMDS = re.compile(r"```\s*(?:bash|sh)\b")
+_RE_FILLER_PHRASES = re.compile(
+    r"(?i)(it is important to note that|as mentioned (above|earlier|before)|"
+    r"in other words|that is to say|keep in mind that|note that|"
+    r"it should be noted|please note|remember that|be aware that|"
+    r"it's worth mentioning)"
+)
+_RE_OBVIOUS_INSTRUCTIONS = re.compile(
+    r"(?i)(make sure to save|don't forget to|always test your|"
+    r"be careful when|ensure you have|make sure you|"
+    r"remember to commit|use version control)"
+)
+_RE_SCOPE_BOUNDARY = re.compile(r"(?i)(do not|don't) use (for|when|if)")
+
+# Used in score_composability()
+_RE_POSITIVE_SCOPE = re.compile(
+    r"(?i)(use this skill when|use when|trigger when|activate for)"
+)
+_RE_NEGATIVE_SCOPE = re.compile(
+    r"(?i)(do not use|don't use|NOT for|not use for|out of scope)"
+)
+_RE_GLOBAL_STATE = re.compile(
+    r"(?i)(must be installed globally|global config|~\/\.|modify system|"
+    r"system-wide|/etc/|export\s+\w+=)"
+)
+_RE_INPUT_SPEC = re.compile(
+    r"(?i)(input:|takes.*as input|expects|requires.*file|requires.*path|target.*skill)"
+)
+_RE_OUTPUT_SPEC = re.compile(
+    r"(?i)(output:|produces|generates|creates|saves.*to|writes.*to|returns)"
+)
+_RE_HANDOFF = re.compile(
+    r"(?i)(then use|hand off to|pass to|chain with|followed by|"
+    r"complementary|works with|after.*use|before.*use|"
+    r"skill-creator|next step)"
+)
+_RE_WHEN_NOT = re.compile(
+    r"(?i)(if.*instead use|for.*use.*instead|suggest using)"
+)
+_RE_HARD_REQUIREMENTS = re.compile(
+    r"(?i)(requires?\s+(?:npm|pip|brew|apt|docker|node|python)\b)"
+)
+_RE_ALTERNATIVES = re.compile(
+    r"(?i)(alternatively|or use|if.*not available|fallback)"
+)
+
+# Used in score_clarity()
+_RE_ALWAYS_PATTERNS = re.compile(r"(?i)\b(always|must)\s+(\w+(?:\s+\w+)?)")
+_RE_NEVER_PATTERNS = re.compile(r"(?i)\b(never|must not|do not|don't)\s+(\w+(?:\s+\w+)?)")
+_RE_VAGUE_REF = re.compile(
+    r"\b(the\s+(?:file|script|output|result|command|path|tool|config))\b", re.IGNORECASE
+)
+_RE_BACKTICK_REF = re.compile(r"`[^`]+`")
+_RE_SPECIFIC_REF = re.compile(r"(`[^`]+`|[\w/]+\.\w+|/[\w/]+)")
+_RE_AMBIGUOUS_PRONOUN = re.compile(
+    r"^\s*(It|This|That)\s+(is|does|will|can|should|has|was|means)\b"
+)
+_RE_RUN_PATTERN = re.compile(
+    r"^\s*(?:\d+\.\s*)?(?:Run|Execute|Install|Configure)\s+(.+)", re.IGNORECASE
+)
+_RE_CONCEPTUAL = re.compile(
+    r"(?i)(baseline|all\s+\d+|VERIFY|evolution|the\s+\w+\s+(?:on|for|to|with|against))"
+)
+_RE_CONCRETE_CMD = re.compile(r"(`[^`]+`|[\w/.-]+\.\w+|/[\w/]+)")
+_RE_CODE_BLOCK_START = re.compile(r"^```")
+
+# Used in score_triggers() / _has_skill_domain_signal()
+_RE_CREATION_PATTERNS = re.compile(
+    r"(?i)(from scratch|brand new|new\b.{0,20}\bskill|create\b.{0,20}\bskill|"
+    r"build\b.{0,20}\bskill|write\b.{0,20}\bskill|design\b.{0,20}\bskill)"
+)
+_RE_NEGATION_BOUNDARIES = re.compile(
+    r"(?:do not|don't|NOT|never)\s+(?:use\s+)?(?:for|when|if|with)?\s*(.+?)(?:\.|,|$)",
+    re.IGNORECASE,
+)
+_RE_WORD_TOKEN = re.compile(r"\b[a-z]{4,}\b")
+
+# Used in _extract_description()
+_RE_DESC_BLOCK = re.compile(
+    r"^description:\s*[>|]-?\s*\n((?:[ \t]+.+\n)*)", re.MULTILINE
+)
+_RE_DESC_INLINE = re.compile(r'^description:\s*"?(.+?)"?\s*$', re.MULTILINE)
+
+# Used in score_diff()
+_RE_DIFF_SIGNAL = re.compile(
+    r"^(?:\d+\.\s*)?(?:Read|Run|Check|Create|Add|Remove|Move|Use|Set|"
+    r"Install|Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|"
+    r"Copy|Delete|Write|Edit|Update|Generate|Execute|Validate|Parse|"
+    r"Extract|Transform|Import|Export|Send|Fetch|Call|Return)\b",
+    re.IGNORECASE,
+)
+_RE_DIFF_EXAMPLE = re.compile(
+    r"(?i)(example\s*[0-9:#]|input.*output|e\.g\.|for instance|for example)"
+)
+_RE_DIFF_NOISE = re.compile(
+    r"(?i)(you (might|could|should|may) (want to|consider|possibly)|"
+    r"it is important to note that|as mentioned (above|earlier|before)|"
+    r"in other words|keep in mind that|note that|please note|"
+    r"make sure to save|don't forget to|always test your)"
+)
+
+# Used in score_coherence() (Change 2)
+_RE_IMPERATIVE_INSTRUCTION = re.compile(
+    r"^\s*(?:\d+\.\s*)?(?:Run|Create|Add|Check|Remove|Move|Use|Set|Install|"
+    r"Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|Copy|Delete|"
+    r"Write|Edit|Update|Generate|Execute|Validate|Parse|Extract|Transform|"
+    r"Import|Export|Send|Fetch|Call|Return)\b(.+)",
+    re.IGNORECASE,
+)
+_RE_CODE_BLOCK_REGION = re.compile(r"```[\s\S]*?```")
+
 # Maximum skill file size (1 MB) to prevent DoS via large inputs
 MAX_SKILL_SIZE = 1_000_000
 
@@ -29,6 +174,15 @@ MAX_CACHE_ENTRIES = 500
 
 # Module-level file cache to avoid redundant reads within a single invocation
 _file_cache: dict[str, str] = {}
+
+
+def invalidate_cache(skill_path: str) -> None:
+    """Invalidate the file cache for a given skill path.
+
+    Public API — callers should use this instead of accessing _file_cache directly.
+    """
+    key = str(Path(skill_path).resolve())
+    _file_cache.pop(key, None)
 
 
 def _read_skill_safe(skill_path: str) -> str:
@@ -85,11 +239,11 @@ def _score_structure_inline(skill_path: str) -> dict:
     # Frontmatter
     if lines and lines[0].strip() == "---":
         score += 10
-        if re.search(r"^name:\s*\S+", content, re.MULTILINE):
+        if _RE_FRONTMATTER_NAME.search(content):
             score += 10
         else:
             issues.append("missing_name")
-        if re.search(r"^description:", content, re.MULTILINE):
+        if _RE_FRONTMATTER_DESC.search(content):
             score += 10
         else:
             issues.append("missing_description")
@@ -104,11 +258,8 @@ def _score_structure_inline(skill_path: str) -> dict:
         issues.append("long_skill_md")
 
     # Examples — match the improved bash script logic
-    real_examples = len(re.findall(
-        r"(?i)(example\s*[0-9:#]|input.*output|e\.g\.|for instance|for example)",
-        content
-    ))
-    code_block_pairs = len(re.findall(r"```", content)) // 2
+    real_examples = len(_RE_REAL_EXAMPLES.findall(content))
+    code_block_pairs = len(_RE_CODE_BLOCKS.findall(content)) // 2
     if real_examples >= 2:
         score += 10
     elif real_examples >= 1 or (real_examples + code_block_pairs // 3) >= 2:
@@ -117,7 +268,7 @@ def _score_structure_inline(skill_path: str) -> dict:
         issues.append("no_real_examples")
 
     # Headers
-    header_count = len(re.findall(r"^##\s", content, re.MULTILINE))
+    header_count = len(_RE_HEADERS.findall(content))
     if header_count >= 3:
         score += 10
     elif header_count >= 1:
@@ -132,17 +283,14 @@ def _score_structure_inline(skill_path: str) -> dict:
         issues.append("no_progressive_disclosure")
 
     # Imperative voice
-    hedge_count = len(re.findall(
-        r"you (might|could|should|may) (want to|consider|possibly)",
-        content, re.IGNORECASE
-    ))
+    hedge_count = len(_RE_HEDGING.findall(content))
     if hedge_count == 0:
         score += 5
     elif hedge_count <= 2:
         score += 3
 
     # Referenced files exist
-    refs = set(re.findall(r"(references|scripts|templates)/[\w./-]+", content))
+    refs = set(_RE_REFS.findall(content))
     missing = [r for r in refs if not (skill_dir / r).exists()]
     if not missing:
         score += 10
@@ -151,11 +299,11 @@ def _score_structure_inline(skill_path: str) -> dict:
         issues.append(f"missing_refs: {missing}")
 
     # No dead content (TODO/FIXME/placeholder, empty sections)
-    todo_count = len(re.findall(r"(?i)(TODO|FIXME|HACK|XXX|placeholder)", content))
+    todo_count = len(_RE_TODO.findall(content))
     # Check for headers followed by only blank lines or next header
     empty_sections = 0
     for i, line in enumerate(lines):
-        if re.match(r"^##\s", line):
+        if _RE_SECTION_HEADER.match(line):
             # Look at next 5 non-empty lines
             next_content = 0
             for j in range(i + 1, min(i + 6, len(lines))):
@@ -187,25 +335,41 @@ def _extract_description(content: str) -> str:
         block text
     """
     # Try block scalar first (> or |)
-    match = re.search(
-        r"^description:\s*[>|]-?\s*\n((?:[ \t]+.+\n)*)",
-        content, re.MULTILINE
-    )
+    match = _RE_DESC_BLOCK.search(content)
     if match:
         return match.group(1).strip()
 
     # Try inline
-    match = re.search(r'^description:\s*"?(.+?)"?\s*$', content, re.MULTILINE)
+    match = _RE_DESC_INLINE.search(content)
     if match:
         return match.group(1).strip()
 
     return ""
 
 
+# --- Lightweight suffix-stripping stemmer (Change 1) ---
+def _stem(word: str) -> str:
+    """Lightweight suffix-stripping stemmer for English skill terms."""
+    # Order matters: longest suffixes first
+    for suffix, min_len in [
+        ("ation", 6), ("ment", 5), ("ness", 5), ("tion", 5),
+        ("sion", 5), ("able", 5), ("ible", 5), ("ying", 4),
+        ("ling", 4), ("ting", 4), ("ning", 4), ("ring", 4),
+        ("ing", 4), ("ied", 4), ("ies", 4), ("ous", 4),
+        ("ive", 4), ("ize", 4), ("ise", 4), ("ate", 4),
+        ("ful", 4), ("ely", 4), ("ally", 5), ("ly", 4),
+        ("ed", 4), ("er", 4), ("es", 4), ("al", 4),
+        ("s", 4),
+    ]:
+        if len(word) >= min_len and word.endswith(suffix):
+            stem = word[:-len(suffix)]
+            if len(stem) >= 3:  # Keep meaningful stems
+                return stem
+    return word
+
+
 # --- Synonym expansion for trigger matching ---
-# Maps common synonyms to canonical terms found in skill descriptions
-# --- Synonym groups for bidirectional expansion ---
-# Each group maps to a canonical term. Both directions are expanded.
+# Non-morphological synonym groups (supplements stemmer for semantic matches)
 _SYNONYM_GROUPS = {
     "improve": ["enhance", "optimize", "refine", "polish", "boost", "upgrade", "tune", "tweak"],
     "trigger": ["activate", "fire", "match", "invoke", "detect"],
@@ -220,31 +384,44 @@ SYNONYM_TABLE = {}
 for canonical, synonyms in _SYNONYM_GROUPS.items():
     for syn in synonyms:
         SYNONYM_TABLE[syn] = canonical
-    # Reverse: canonical expands to first synonym (ensures bidirectional matching)
-    SYNONYM_TABLE[canonical] = canonical  # canonical maps to itself for uniform handling
+    SYNONYM_TABLE[canonical] = canonical
 
 
 def _tokenize_meaningful(text: str, expand_reverse: bool = False) -> list[str]:
-    """Extract meaningful words (4+ chars, not stopwords), with synonym expansion.
+    """Extract meaningful words (4+ chars, not stopwords), with stemming + synonym expansion.
+
+    Applies suffix-stripping stemmer to each word and adds the stem as an extra
+    token (if different from the word itself). Synonym table supplements for
+    non-morphological synonyms (e.g., "audit" → "assess").
 
     expand_reverse=True: also expand canonical→all-synonyms (use for descriptions only).
     expand_reverse=False: only expand synonym→canonical (use for prompts).
     """
-    words = re.findall(r"\b[a-z]{4,}\b", text.lower())
+    words = _RE_WORD_TOKEN.findall(text.lower())
     result = []
+    seen = set()
     for w in words:
         if w in STOPWORDS:
             continue
-        result.append(w)
+        if w not in seen:
+            result.append(w)
+            seen.add(w)
+        # Add stem as extra token (catches morphological variants)
+        stemmed = _stem(w)
+        if stemmed != w and stemmed not in seen:
+            result.append(stemmed)
+            seen.add(stemmed)
         # Forward: synonym → canonical (always)
         canonical = SYNONYM_TABLE.get(w)
-        if canonical and canonical != w and canonical not in result:
+        if canonical and canonical not in seen:
             result.append(canonical)
+            seen.add(canonical)
         # Reverse: canonical → all synonyms (only for descriptions)
         if expand_reverse and w in _SYNONYM_GROUPS:
             for syn in _SYNONYM_GROUPS[w]:
-                if syn not in result:
+                if syn not in seen:
                     result.append(syn)
+                    seen.add(syn)
     return result
 
 
@@ -310,10 +487,7 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
     desc_lower = description.lower()
 
     # Extract negative boundaries from description
-    neg_patterns = re.findall(
-        r"(?:do not|don't|NOT|never)\s+(?:use\s+)?(?:for|when|if|with)?\s*(.+?)(?:\.|,|$)",
-        description, re.IGNORECASE
-    )
+    neg_patterns = _RE_NEGATION_BOUNDARIES.findall(description)
     negative_terms = set()
     for pat in neg_patterns:
         negative_terms.update(_tokenize_meaningful(pat))
@@ -358,11 +532,7 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
             overlap_score *= 0.3  # Heavy penalty for matching negated terms
 
         # Extra check: "from scratch" / "brand new" patterns indicate creation, not improvement
-        creation_patterns = re.findall(
-            r"(?i)(from scratch|brand new|new\b.{0,20}\bskill|create\b.{0,20}\bskill|"
-            r"build\b.{0,20}\bskill|write\b.{0,20}\bskill|design\b.{0,20}\bskill)",
-            prompt
-        )
+        creation_patterns = _RE_CREATION_PATTERNS.findall(prompt)
         if creation_patterns:
             overlap_score *= 0.1  # Strong penalty: creation is anti-signal for improvement
 
@@ -451,54 +621,27 @@ def score_efficiency(skill_path: str) -> dict:
     # --- Signal indicators (what makes content valuable) ---
 
     # Actionable instructions (imperative verbs at line start)
-    actionable_lines = len(re.findall(
-        r"^(?:\d+\.\s*)?(?:Read|Run|Check|Create|Add|Remove|Move|Use|Set|"
-        r"Install|Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|"
-        r"Copy|Delete|Write|Edit|Update|Generate|Execute|Validate|Parse|"
-        r"Extract|Transform|Import|Export|Send|Fetch|Call|Return)\b",
-        content, re.MULTILINE
-    ))
+    actionable_lines = len(_RE_ACTIONABLE_LINES.findall(content))
 
     # Real examples (input/output pairs, not just code blocks)
-    real_examples = len(re.findall(
-        r"(?i)(example\s*[0-9:#]|input.*output|e\.g\.|for instance|for example)",
-        content
-    ))
+    real_examples = len(_RE_REAL_EXAMPLES.findall(content))
 
     # WHY-based reasoning (explains rationale)
-    why_count = len(re.findall(
-        r"\b(because|since|this enables|this prevents|this means|the reason|"
-        r"this ensures|this avoids|otherwise|so that|why[:\s])\b",
-        content, re.IGNORECASE
-    ))
+    why_count = len(_RE_WHY_COUNT.findall(content))
 
     # Verification commands (executable checks)
-    verification_cmds = len(re.findall(r"```\s*(?:bash|sh)\b", content))
+    verification_cmds = len(_RE_VERIFICATION_CMDS.findall(content))
 
     # --- Noise indicators (what wastes tokens) ---
 
     # Hedging language
-    hedge_count = len(re.findall(
-        r"you (might|could|should|may) (want to|consider|possibly)",
-        content, re.IGNORECASE
-    ))
+    hedge_count = len(_RE_HEDGING.findall(content))
 
     # Redundant phrases (saying the same thing multiple ways)
-    filler_phrases = len(re.findall(
-        r"(?i)(it is important to note that|as mentioned (above|earlier|before)|"
-        r"in other words|that is to say|keep in mind that|note that|"
-        r"it should be noted|please note|remember that|be aware that|"
-        r"it's worth mentioning)",
-        content
-    ))
+    filler_phrases = len(_RE_FILLER_PHRASES.findall(content))
 
     # Instructions Claude already knows (generic coding advice)
-    obvious_instructions = len(re.findall(
-        r"(?i)(make sure to save|don't forget to|always test your|"
-        r"be careful when|ensure you have|make sure you|"
-        r"remember to commit|use version control)",
-        content
-    ))
+    obvious_instructions = len(_RE_OBVIOUS_INSTRUCTIONS.findall(content))
 
     # Empty/near-empty lines ratio
     empty_lines = sum(1 for line in lines if not line.strip())
@@ -545,7 +688,7 @@ def score_efficiency(skill_path: str) -> dict:
         score = max(20, score - 5)
 
     # Bonus for explicit scope boundaries (+3)
-    if re.search(r"(?i)(do not|don't) use (for|when|if)", full_content):
+    if _RE_SCOPE_BOUNDARY.search(full_content):
         score = min(100, score + 3)
 
     # Bonus for conciseness: under 300 lines with good signal (+5)
@@ -599,14 +742,8 @@ def score_composability(skill_path: str) -> dict:
     issues = []
 
     # 1. Clear scope boundaries (20 pts)
-    has_positive_scope = bool(re.search(
-        r"(?i)(use this skill when|use when|trigger when|activate for)",
-        content
-    ))
-    has_negative_scope = bool(re.search(
-        r"(?i)(do not use|don't use|NOT for|not use for|out of scope)",
-        content
-    ))
+    has_positive_scope = bool(_RE_POSITIVE_SCOPE.search(content))
+    has_negative_scope = bool(_RE_NEGATIVE_SCOPE.search(content))
     if has_positive_scope and has_negative_scope:
         score += 20
     elif has_positive_scope or has_negative_scope:
@@ -616,11 +753,7 @@ def score_composability(skill_path: str) -> dict:
         issues.append("no_scope_boundaries")
 
     # 2. No global state assumptions (20 pts)
-    global_state_patterns = re.findall(
-        r"(?i)(must be installed globally|global config|~\/\.|modify system|"
-        r"system-wide|/etc/|export\s+\w+=)",
-        content
-    )
+    global_state_patterns = _RE_GLOBAL_STATE.findall(content)
     if not global_state_patterns:
         score += 20
     elif len(global_state_patterns) <= 2:
@@ -630,14 +763,8 @@ def score_composability(skill_path: str) -> dict:
         issues.append(f"heavy_global_state_assumptions:{len(global_state_patterns)}")
 
     # 3. Input/output contract clarity (20 pts)
-    has_input_spec = bool(re.search(
-        r"(?i)(input:|takes.*as input|expects|requires.*file|requires.*path|target.*skill)",
-        content
-    ))
-    has_output_spec = bool(re.search(
-        r"(?i)(output:|produces|generates|creates|saves.*to|writes.*to|returns)",
-        content
-    ))
+    has_input_spec = bool(_RE_INPUT_SPEC.search(content))
+    has_output_spec = bool(_RE_OUTPUT_SPEC.search(content))
     if has_input_spec and has_output_spec:
         score += 20
     elif has_input_spec or has_output_spec:
@@ -647,16 +774,8 @@ def score_composability(skill_path: str) -> dict:
         issues.append("no_io_contract")
 
     # 4. Explicit handoff points (20 pts)
-    has_handoff = bool(re.search(
-        r"(?i)(then use|hand off to|pass to|chain with|followed by|"
-        r"complementary|works with|after.*use|before.*use|"
-        r"skill-creator|next step)",
-        content
-    ))
-    has_when_not = bool(re.search(
-        r"(?i)(if.*instead use|for.*use.*instead|suggest using)",
-        content
-    ))
+    has_handoff = bool(_RE_HANDOFF.search(content))
+    has_when_not = bool(_RE_WHEN_NOT.search(content))
     if has_handoff and has_when_not:
         score += 20
     elif has_handoff or has_when_not:
@@ -666,14 +785,8 @@ def score_composability(skill_path: str) -> dict:
 
     # 5. No conflicting tool assumptions (20 pts)
     # Check for hard-coded tool requirements without alternatives
-    hard_requirements = re.findall(
-        r"(?i)(requires?\s+(?:npm|pip|brew|apt|docker|node|python)\b)",
-        content
-    )
-    has_alternatives = bool(re.search(
-        r"(?i)(alternatively|or use|if.*not available|fallback)",
-        content
-    ))
+    hard_requirements = _RE_HARD_REQUIREMENTS.findall(content)
+    has_alternatives = bool(_RE_ALTERNATIVES.search(content))
     if not hard_requirements or has_alternatives:
         score += 20
     elif len(hard_requirements) <= 2:
@@ -693,6 +806,75 @@ def score_composability(skill_path: str) -> dict:
             "has_handoff": has_handoff,
             "global_state_patterns": len(global_state_patterns) if global_state_patterns else 0,
         }
+    }
+
+
+def score_coherence(skill_path: str, eval_suite: Optional[dict]) -> dict:
+    """Check instruction-assertion alignment as a static correctness proxy.
+
+    Cross-references imperative instructions in the skill body against
+    assertion values in the eval suite's test_cases. Returns a bonus score
+    (0-10) based on how many instruction topics are covered by assertions.
+    """
+    if not eval_suite or "test_cases" not in eval_suite:
+        return {"bonus": 0, "details": {"reason": "no_eval_suite"}}
+
+    try:
+        content = _read_skill_safe(skill_path)
+    except (FileNotFoundError, ValueError):
+        return {"bonus": 0, "details": {"reason": "file_not_found"}}
+
+    # Strip frontmatter
+    body = content
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end > 0:
+            body = content[end + 3:]
+
+    # 1. Extract imperative instruction topics from skill body
+    instruction_topics = set()
+    for line in body.split("\n"):
+        m = _RE_IMPERATIVE_INSTRUCTION.match(line)
+        if m:
+            rest = m.group(1).strip()
+            # Extract meaningful words from the instruction
+            words = _RE_WORD_TOKEN.findall(rest.lower())
+            for w in words:
+                if w not in STOPWORDS and len(w) >= 4:
+                    instruction_topics.add(_stem(w))
+
+    if not instruction_topics:
+        return {"bonus": 0, "details": {"reason": "no_instructions_found"}}
+
+    # 2. Extract assertion values from test_cases
+    assertion_topics = set()
+    for tc in eval_suite["test_cases"]:
+        for assertion in tc.get("assertions", []):
+            value = assertion.get("value", "")
+            if value:
+                words = _RE_WORD_TOKEN.findall(value.lower())
+                for w in words:
+                    if w not in STOPWORDS and len(w) >= 4:
+                        assertion_topics.add(_stem(w))
+
+    if not assertion_topics:
+        return {"bonus": 0, "details": {"reason": "no_assertion_values"}}
+
+    # 3. Check overlap: how many instruction topics appear in assertions
+    covered = instruction_topics & assertion_topics
+    coverage_ratio = len(covered) / len(instruction_topics) if instruction_topics else 0
+
+    # Score: 10 pts for full coverage, proportional otherwise
+    bonus = min(10, round(coverage_ratio * 10))
+
+    return {
+        "bonus": bonus,
+        "details": {
+            "instruction_topics": len(instruction_topics),
+            "assertion_topics": len(assertion_topics),
+            "covered_topics": len(covered),
+            "coverage_ratio": round(coverage_ratio, 2),
+        },
     }
 
 
@@ -789,6 +971,11 @@ def score_quality(skill_path: str, eval_suite: Optional[dict]) -> dict:
     else:
         issues.append("no_assertions")
 
+    # 5. Instruction-assertion coherence bonus (up to +10 pts)
+    coherence = score_coherence(skill_path, eval_suite)
+    coherence_bonus = coherence["bonus"]
+    score += coherence_bonus
+
     return {
         "score": min(score, 100),
         "issues": issues,
@@ -799,6 +986,8 @@ def score_quality(skill_path: str, eval_suite: Optional[dict]) -> dict:
             "covered_features": sorted(covered_features),
             "total_assertions": total_assertions,
             "described_assertions": described_assertions,
+            "coherence_bonus": coherence_bonus,
+            "coherence_details": coherence["details"],
         }
     }
 
@@ -1130,8 +1319,13 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
             "Cannot assess whether instructions are clear to Claude in practice."
         )
 
+    # Determine score type based on what was measured
+    has_runtime = "runtime" in measured
+    score_type = "structural+runtime" if has_runtime else "structural"
+
     return {
         "score": composite,
+        "score_type": score_type,
         "measured_dimensions": measured_count,
         "total_dimensions": total_count,
         "weight_coverage": confidence,
@@ -1166,7 +1360,7 @@ def score_clarity(skill_path: str) -> dict:
 
     # Strip code blocks before clarity analysis (avoid false positives
     # from "always"/"never" inside code examples)
-    prose_body = re.sub(r"```[\s\S]*?```", "", body)
+    prose_body = _RE_CODE_BLOCK_REGION.sub("", body)
 
     lines = prose_body.strip().split("\n")
 
@@ -1181,8 +1375,8 @@ def score_clarity(skill_path: str) -> dict:
     # 1. Contradiction detection (30 pts)
     # Find "always/never/must/must not" pairs on overlapping topics
     # Compare first verb only to catch "always run X" vs "never run Y"
-    always_patterns = re.findall(r"(?i)\b(always|must)\s+(\w+(?:\s+\w+)?)", prose_body)
-    never_patterns = re.findall(r"(?i)\b(never|must not|do not|don't)\s+(\w+(?:\s+\w+)?)", prose_body)
+    always_patterns = _RE_ALWAYS_PATTERNS.findall(prose_body)
+    never_patterns = _RE_NEVER_PATTERNS.findall(prose_body)
 
     always_topics = {topic.lower().strip() for _, topic in always_patterns}
     never_topics = {topic.lower().strip() for _, topic in never_patterns}
@@ -1199,17 +1393,16 @@ def score_clarity(skill_path: str) -> dict:
     # 2. Vague reference detection (25 pts)
     # "the file", "the script", "the output" without clear antecedent in preceding 3 lines
     vague_refs = []
-    vague_pattern = re.compile(r"\b(the\s+(?:file|script|output|result|command|path|tool|config))\b", re.IGNORECASE)
     for i, line in enumerate(lines):
-        matches = vague_pattern.findall(line)
+        matches = _RE_VAGUE_REF.findall(line)
         for match in matches:
             # Skip if backtick-quoted reference is on the same line (e.g., "the file `output.json`")
-            if re.search(r"`[^`]+`", line):
+            if _RE_BACKTICK_REF.search(line):
                 continue
             # Check preceding 3 lines for a specific file/path reference
             context = "\n".join(lines[max(0, i - 3):i])
             # If no specific path, filename, or backtick-quoted reference nearby, it's vague
-            if not re.search(r"(`[^`]+`|[\w/]+\.\w+|/[\w/]+)", context):
+            if not _RE_SPECIFIC_REF.search(context):
                 vague_refs.append(f"line {i + 1}: {match}")
 
     if vague_refs:
@@ -1221,9 +1414,8 @@ def score_clarity(skill_path: str) -> dict:
     # 3. Ambiguous pronoun detection (20 pts)
     # Sentences starting with "It ", "This ", "That " without clear referent
     ambiguous_pronouns = []
-    pronoun_pattern = re.compile(r"^\s*(It|This|That)\s+(is|does|will|can|should|has|was|means)\b")
     for i, line in enumerate(lines):
-        if pronoun_pattern.match(line):
+        if _RE_AMBIGUOUS_PRONOUN.match(line):
             # Check if preceding line provides a clear subject
             if i > 0:
                 prev = lines[i - 1].strip()
@@ -1241,20 +1433,15 @@ def score_clarity(skill_path: str) -> dict:
     # Every "Run X" / "Execute X" should have a concrete command or path
     # Skip conceptual uses like "Run eval evolution BETWEEN sessions"
     incomplete_instructions = []
-    run_pattern = re.compile(r"^\s*(?:\d+\.\s*)?(?:Run|Execute|Install|Configure)\s+(.+)", re.IGNORECASE)
-    # Conceptual continuations that aren't shell commands
-    conceptual_pattern = re.compile(
-        r"(?i)(baseline|all\s+\d+|VERIFY|evolution|the\s+\w+\s+(?:on|for|to|with|against))",
-    )
     for i, line in enumerate(lines):
-        m = run_pattern.match(line)
+        m = _RE_RUN_PATTERN.match(line)
         if m:
             rest = m.group(1).strip()
             # Skip conceptual instructions (not meant as shell commands)
-            if conceptual_pattern.search(rest):
+            if _RE_CONCEPTUAL.search(rest):
                 continue
             # Check if there's a backtick command, a path, or a code block nearby
-            has_concrete = bool(re.search(r"(`[^`]+`|[\w/.-]+\.\w+|/[\w/]+)", rest))
+            has_concrete = bool(_RE_CONCRETE_CMD.search(rest))
             # Also check next line for a code block
             if not has_concrete and i + 1 < len(lines):
                 has_concrete = lines[i + 1].strip().startswith("```")
@@ -1296,27 +1483,9 @@ def score_diff(skill_path: str, diff_ref: str = "HEAD~1") -> dict:
     added_lines = [line[1:] for line in diff_text.split("\n") if line.startswith("+") and not line.startswith("+++")]
     removed_lines = [line[1:] for line in diff_text.split("\n") if line.startswith("-") and not line.startswith("---")]
 
-    # Signal patterns (from score_efficiency)
-    signal_pattern = re.compile(
-        r"^(?:\d+\.\s*)?(?:Read|Run|Check|Create|Add|Remove|Move|Use|Set|"
-        r"Install|Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|"
-        r"Copy|Delete|Write|Edit|Update|Generate|Execute|Validate|Parse|"
-        r"Extract|Transform|Import|Export|Send|Fetch|Call|Return)\b",
-        re.IGNORECASE
-    )
-    example_pattern = re.compile(
-        r"(?i)(example\s*[0-9:#]|input.*output|e\.g\.|for instance|for example)"
-    )
-    noise_pattern = re.compile(
-        r"(?i)(you (might|could|should|may) (want to|consider|possibly)|"
-        r"it is important to note that|as mentioned (above|earlier|before)|"
-        r"in other words|keep in mind that|note that|please note|"
-        r"make sure to save|don't forget to|always test your)"
-    )
-
     def classify_lines(lines: list[str]) -> dict:
-        signals = sum(1 for l in lines if signal_pattern.search(l) or example_pattern.search(l))
-        noise = sum(1 for l in lines if noise_pattern.search(l))
+        signals = sum(1 for l in lines if _RE_DIFF_SIGNAL.search(l) or _RE_DIFF_EXAMPLE.search(l))
+        noise = sum(1 for l in lines if _RE_DIFF_NOISE.search(l))
         neutral = max(0, len(lines) - signals - noise)
         return {"signal": signals, "noise": noise, "neutral": neutral, "total": len(lines)}
 
@@ -1379,7 +1548,7 @@ def explain_score_change(old_scores: dict, new_scores: dict, diff_analysis: dict
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SkillForge Quality Scorer")
+    parser = argparse.ArgumentParser(description="SkillForge Structural Scorer")
     parser.add_argument("skill_path", help="Path to SKILL.md")
     parser.add_argument("--eval-suite", help="Path to eval suite JSON", default=None)
     parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -1437,6 +1606,7 @@ def main():
     result = {
         "skill_path": args.skill_path,
         "composite_score": composite_result["score"],
+        "score_type": composite_result["score_type"],
         "confidence": {
             "measured": composite_result["measured_dimensions"],
             "total": composite_result["total_dimensions"],
@@ -1466,7 +1636,8 @@ def main():
         print(json.dumps(result, indent=2))
     else:
         print(f"\n{'='*60}")
-        print(f"  SkillForge Quality Score: {composite_result['score']}/100")
+        score_type = "Structural+Runtime" if args.runtime else "Structural"
+        print(f"  SkillForge {score_type} Score: {composite_result['score']}/100")
 
         # Show confidence warning
         mc = composite_result['measured_dimensions']

@@ -321,8 +321,7 @@ def main():
     if args.auto:
         try:
             sys.path.insert(0, str(SCRIPT_DIR))
-            import importlib
-            meta = importlib.import_module("meta-report")
+            import meta_report as meta
             prediction = meta.predict_best_strategy({}, meta_dir=meta.META_DIR_DEFAULT)
             if prediction.get("available") and prediction.get("predictions"):
                 strategies = [p["strategy"] for p in prediction["predictions"][:3]]

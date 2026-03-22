@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
 import sys
 from collections import defaultdict
@@ -25,8 +26,8 @@ from typing import Any, Optional
 # Import scorer functions for tokenization and description extraction
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
-import importlib
-scorer = importlib.import_module("score-skill")
+
+import score_skill as scorer
 
 
 # --- Skill Discovery ---
@@ -146,14 +147,56 @@ def _cosine_similarity(v1: dict, v2: dict) -> float:
     return dot / (norm1 * norm2)
 
 
-def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
-    """Detect pairwise trigger overlap using TF-IDF cosine similarity.
+def _stable_token_hash(token: str) -> int:
+    """Deterministic hash for a token string (independent of PYTHONHASHSEED)."""
+    return int(hashlib.md5(token.encode("utf-8")).hexdigest()[:8], 16)
 
-    Thresholds: >=0.70 critical, 0.45-0.69 warning, 0.20-0.44 info
+
+def _minhash_signature(tokens: set, num_hashes: int = 128, seed: int = 42) -> list[int]:
+    """Compute MinHash signature for a token set.
+
+    Uses deterministic hashing (hashlib) instead of Python's built-in hash()
+    to ensure reproducible signatures across process invocations.
     """
-    vectors, _ = _compute_tfidf_vectors(skills)
-    overlaps = []
+    if not tokens:
+        return [0] * num_hashes
+    rng = random.Random(seed)
+    # Generate hash function coefficients (consistent across calls via seed)
+    coeffs = [(rng.randint(1, 2**31 - 1), rng.randint(0, 2**31 - 1)) for _ in range(num_hashes)]
+    MOD = (1 << 31) - 1
+    signature = []
+    for a, b in coeffs:
+        min_hash = min((a * _stable_token_hash(token) + b) % MOD for token in tokens)
+        signature.append(min_hash)
+    return signature
 
+
+def _lsh_candidates(signatures: list[list[int]], bands: int = 16) -> set[tuple[int, int]]:
+    """Find candidate pairs using LSH banding."""
+    num_hashes = len(signatures[0]) if signatures else 0
+    rows_per_band = num_hashes // bands
+
+    candidates = set()
+    for band_idx in range(bands):
+        buckets: dict[int, list[int]] = {}
+        start = band_idx * rows_per_band
+        end = start + rows_per_band
+        for skill_idx, sig in enumerate(signatures):
+            band_hash = hash(tuple(sig[start:end]))
+            if band_hash in buckets:
+                for other_idx in buckets[band_hash]:
+                    pair = (min(skill_idx, other_idx), max(skill_idx, other_idx))
+                    candidates.add(pair)
+                buckets[band_hash].append(skill_idx)
+            else:
+                buckets[band_hash] = [skill_idx]
+
+    return candidates
+
+
+def _detect_overlaps_bruteforce(skills: list[dict], vectors: dict) -> list[dict]:
+    """O(n^2) brute-force trigger overlap detection for small skill sets."""
+    overlaps = []
     for i in range(len(skills)):
         for j in range(i + 1, len(skills)):
             if i not in vectors or j not in vectors:
@@ -163,7 +206,6 @@ def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
             if sim < 0.20:
                 continue
 
-            # Find overlapping terms
             common = set(vectors[i].keys()) & set(vectors[j].keys())
 
             if sim >= 0.70:
@@ -183,6 +225,62 @@ def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
                 "similarity": round(sim, 3),
                 "common_terms": sorted(common)[:10],
             })
+    return overlaps
+
+
+def detect_trigger_overlaps(skills: list[dict]) -> list[dict]:
+    """Detect pairwise trigger overlap using TF-IDF cosine similarity.
+
+    Uses MinHash + LSH for O(n) candidate pruning when n >= 50,
+    falls back to O(n^2) brute-force for smaller sets.
+
+    Thresholds: >=0.70 critical, 0.45-0.69 warning, 0.20-0.44 info
+    """
+    vectors, _ = _compute_tfidf_vectors(skills)
+
+    # Fallback: brute-force for small skill sets (LSH overhead not worth it)
+    if len(skills) < 50:
+        return _detect_overlaps_bruteforce(skills, vectors)
+
+    # MinHash + LSH path for large skill sets
+    # Compute MinHash signatures from token sets
+    signatures = []
+    for skill in skills:
+        token_set = set(skill.get("tokens", []))
+        signatures.append(_minhash_signature(token_set))
+
+    # Find candidate pairs via LSH banding
+    candidates = _lsh_candidates(signatures)
+
+    # Only compute exact cosine similarity for candidate pairs
+    overlaps = []
+    for i, j in candidates:
+        if i not in vectors or j not in vectors:
+            continue
+
+        sim = _cosine_similarity(vectors[i], vectors[j])
+        if sim < 0.20:
+            continue
+
+        common = set(vectors[i].keys()) & set(vectors[j].keys())
+
+        if sim >= 0.70:
+            severity = "critical"
+        elif sim >= 0.45:
+            severity = "warning"
+        else:
+            severity = "info"
+
+        overlaps.append({
+            "type": "trigger_overlap",
+            "severity": severity,
+            "skill_a": skills[i]["name"],
+            "skill_a_path": skills[i]["path"],
+            "skill_b": skills[j]["name"],
+            "skill_b_path": skills[j]["path"],
+            "similarity": round(sim, 3),
+            "common_terms": sorted(common)[:10],
+        })
 
     return overlaps
 
@@ -344,56 +442,53 @@ def _classify_domain(skill: dict) -> dict[str, float]:
 
 
 def detect_scope_collisions(skills: list[dict]) -> list[dict]:
-    """Detect skills with overlapping primary domains and positive scope overlap."""
-    # Classify all skills
-    skill_domains = []
-    for skill in skills:
+    """Detect skills with overlapping primary domains and positive scope overlap.
+
+    Groups skills by primary domain first, then only compares within each
+    domain group — reducing comparisons from O(n^2) to O(k^2 per domain)
+    where k << n.
+    """
+    # Group skill indices by primary domain
+    domain_groups: dict[str, list[int]] = defaultdict(list)
+    for i, skill in enumerate(skills):
         domains = _classify_domain(skill)
-        primary = max(domains, key=domains.get) if domains else None
-        skill_domains.append({
-            "skill": skill,
-            "domains": domains,
-            "primary": primary,
-        })
+        if domains:
+            primary = max(domains, key=domains.get)
+            domain_groups[primary].append(i)
 
     collisions = []
 
-    for i in range(len(skill_domains)):
-        for j in range(i + 1, len(skill_domains)):
-            sd_i = skill_domains[i]
-            sd_j = skill_domains[j]
+    for domain, indices in domain_groups.items():
+        # Only compare within same domain
+        for a_pos in range(len(indices)):
+            for b_pos in range(a_pos + 1, len(indices)):
+                i, j = indices[a_pos], indices[b_pos]
 
-            # Both need a primary domain and they must match
-            if not sd_i["primary"] or not sd_j["primary"]:
-                continue
-            if sd_i["primary"] != sd_j["primary"]:
-                continue
+                # Check scope overlap via token overlap
+                tokens_i = set(skills[i].get("tokens", []))
+                tokens_j = set(skills[j].get("tokens", []))
+                if not tokens_i or not tokens_j:
+                    continue
 
-            # Check scope overlap via token overlap
-            tokens_i = set(skills[i].get("tokens", []))
-            tokens_j = set(skills[j].get("tokens", []))
-            if not tokens_i or not tokens_j:
-                continue
+                overlap = len(tokens_i & tokens_j)
+                union = len(tokens_i | tokens_j)
+                jaccard = overlap / union if union > 0 else 0
 
-            overlap = len(tokens_i & tokens_j)
-            union = len(tokens_i | tokens_j)
-            jaccard = overlap / union if union > 0 else 0
+                if jaccard < 0.20:
+                    continue
 
-            if jaccard < 0.20:
-                continue
+                severity = "critical" if jaccard >= 0.50 else "warning" if jaccard >= 0.35 else "info"
 
-            severity = "critical" if jaccard >= 0.50 else "warning" if jaccard >= 0.35 else "info"
-
-            collisions.append({
-                "type": "scope_collision",
-                "severity": severity,
-                "skill_a": skills[i]["name"],
-                "skill_a_path": skills[i]["path"],
-                "skill_b": skills[j]["name"],
-                "skill_b_path": skills[j]["path"],
-                "shared_domain": sd_i["primary"],
-                "overlap_score": round(jaccard, 3),
-            })
+                collisions.append({
+                    "type": "scope_collision",
+                    "severity": severity,
+                    "skill_a": skills[i]["name"],
+                    "skill_a_path": skills[i]["path"],
+                    "skill_b": skills[j]["name"],
+                    "skill_b_path": skills[j]["path"],
+                    "shared_domain": domain,
+                    "overlap_score": round(jaccard, 3),
+                })
 
     return collisions
 

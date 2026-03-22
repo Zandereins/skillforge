@@ -210,7 +210,10 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
     lines.append("")
 
     # --- Score Summary table ---
-    lines.append("## Score Summary")
+    lines.append("## Structural Score Summary")
+    lines.append("")
+    lines.append("> These scores measure file structure, keyword coverage, and eval suite")
+    lines.append("> completeness — not runtime effectiveness. Enable `--runtime` for validated scoring.")
     lines.append("")
     lines.append("| Dimension | Baseline | Current | Delta | Grade | Trend |")
     lines.append("|-----------|----------|---------|-------|-------|-------|")

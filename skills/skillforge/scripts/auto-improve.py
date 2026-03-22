@@ -3,7 +3,7 @@ from __future__ import annotations
 """SkillForge Auto-Improve — Autonomous Self-Driving Loop
 
 Drives the entire improvement loop without a Claude session:
-  baseline score → gradient → auto-apply top-1 → score → keep/revert → log → repeat
+  baseline score → gradient → top-3 exploration → score → keep best/revert → log → repeat
 
 60-70% of gradients are deterministic (frontmatter fixes, noise removal, TODO cleanup).
 These are applied directly. Medium/low-confidence changes fall back to claude -p.
@@ -12,10 +12,10 @@ Usage:
     python3 auto-improve.py SKILL.md [--max-iterations N] [--dry-run] [--json]
     python3 auto-improve.py SKILL.md --resume  # Resume from JSONL state file
 
-ROI-based stopping:
-  - marginal_roi < 0.2 for 3 consecutive windows → stop
+Stopping (EMA-based plateau detection):
   - composite >= 98 → stop
   - all dims >= 90 → stop
+  - EMA ROI < 0.1 for 5 consecutive entries → stop
 """
 
 import argparse
@@ -58,36 +58,37 @@ except ImportError:
 # --- Imports from sibling modules ---
 
 sys.path.insert(0, str(SCRIPT_DIR))
-import importlib
-scorer = importlib.import_module("score-skill")
-gradient_mod = importlib.import_module("text-gradient")
 
-# Optional imports
+# Use underscore aliases for clean imports (wrapper modules for hyphenated originals)
+import score_skill as scorer
+import text_gradient as gradient_mod
+
+# Optional imports — use underscore aliases where available
 _MISSING_MODULES: list[tuple[str, str]] = []
 
 try:
-    achievements_mod = importlib.import_module("achievements")
+    import achievements as achievements_mod
 except ImportError as e:
     achievements_mod = None
     _MISSING_MODULES.append(("achievements", str(e)))
 
 try:
-    episodic_store = importlib.import_module("episodic-store")
+    import episodic_store
 except ImportError as e:
     episodic_store = None
-    _MISSING_MODULES.append(("episodic-store", str(e)))
+    _MISSING_MODULES.append(("episodic_store", str(e)))
 
 try:
-    meta_report = importlib.import_module("meta-report")
+    import meta_report
 except ImportError as e:
     meta_report = None
-    _MISSING_MODULES.append(("meta-report", str(e)))
+    _MISSING_MODULES.append(("meta_report", str(e)))
 
 try:
-    parallel_runner = importlib.import_module("parallel-runner")
+    import parallel_runner
 except ImportError as e:
     parallel_runner = None
-    _MISSING_MODULES.append(("parallel-runner", str(e)))
+    _MISSING_MODULES.append(("parallel_runner", str(e)))
 
 
 # --- State Management ---
@@ -129,6 +130,8 @@ def _load_state(skill_path: str) -> list[dict]:
             else:
                 print(f"Warning: state file exceeds {MAX_STATE_SIZE} bytes, truncating to recent entries", file=sys.stderr)
             lines = lines[-100:]
+            # Rewrite truncated file to actually reduce size on disk
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         else:
             lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as e:
@@ -193,19 +196,54 @@ def _load_eval_suite(skill_path: str) -> Optional[dict]:
 
 # --- ROI Stopping ---
 
-def _compute_marginal_roi(state: list[dict], window: int = 5) -> float:
-    """Compute marginal ROI over the last N iterations.
+def _has_dimension_regression(
+    current_score: dict, new_score: dict, threshold: float = 15
+) -> Optional[tuple[str, float, float]]:
+    """Check if any dimension regressed by more than threshold points.
 
-    ROI = sum of positive deltas in window / window size.
+    Returns (dim_name, old_val, new_val) if regression found, else None.
     """
-    if len(state) < 2:
-        return 1.0  # Not enough data for meaningful ROI, neutral value
-    if len(state) < window:
-        return float("inf")  # Not enough data for full window
+    old_dims = current_score.get("dimensions", {})
+    new_dims = new_score.get("dimensions", {})
+    for dim_name, old_val in old_dims.items():
+        if not isinstance(old_val, (int, float)) or old_val < 0:
+            continue
+        new_val = new_dims.get(dim_name, old_val)
+        if not isinstance(new_val, (int, float)) or new_val < 0:
+            continue
+        dim_drop = old_val - new_val
+        if dim_drop > threshold:
+            return (dim_name, old_val, new_val)
+    return None
 
-    recent = state[-window:]
-    total_delta = sum(e.get("delta", 0) for e in recent if e.get("status") == "keep")
-    return total_delta / window
+
+def _compute_ema_roi(state: list[dict], alpha: float = 0.3) -> float:
+    """Compute EMA of deltas for adaptive plateau detection.
+
+    Uses exponential moving average over absolute deltas of keep/discard entries.
+    Returns infinity if fewer than 3 qualifying entries exist.
+    """
+    qualifying = [e for e in state if e.get("status") in ("keep", "discard")]
+    if len(qualifying) < 3:
+        return float("inf")
+
+    ema = 0.0
+    for entry in qualifying:
+        delta = entry.get("delta", 0)
+        ema = alpha * abs(delta) + (1 - alpha) * ema
+    return ema
+
+
+def _compute_relative_roi(delta: float, current_composite: float) -> float:
+    """Compute relative ROI: delta / remaining headroom.
+
+    A +0.5 at score 95 (headroom 5) = 0.1 relative ROI.
+    A +0.5 at score 50 (headroom 50) = 0.01 relative ROI.
+    """
+    headroom = 100 - current_composite
+    if headroom <= 0:
+        return float("inf") if delta > 0 else 0.0
+    return delta / headroom
 
 
 def _should_stop(state: list[dict], current_score: dict) -> tuple[bool, str]:
@@ -225,20 +263,20 @@ def _should_stop(state: list[dict], current_score: dict) -> tuple[bool, str]:
     if measurable and all(v >= 90 for v in measurable.values()):
         return True, f"all dimensions >= 90"
 
-    # ROI-based stopping: marginal_roi < 0.2 for 3 consecutive windows
-    if len(state) >= 15:
-        window = 5
-        low_roi_count = 0
-        for offset in range(3):
-            start = -(window * (offset + 1))
-            end = -(window * offset) if offset > 0 else None
-            window_entries = state[start:end] if end else state[start:]
-            roi = _compute_marginal_roi(window_entries, window=len(window_entries))
-            if roi < 0.2:
-                low_roi_count += 1
-
-        if low_roi_count >= 3:
-            return True, "marginal ROI < 0.2 for 3 consecutive windows"
+    # EMA-based plateau detection: EMA ROI < 0.1 for the last 5 entries
+    qualifying = [e for e in state if e.get("status") in ("keep", "discard")]
+    if len(qualifying) >= 5:
+        # Check EMA at each of the last 5 positions (including the final one)
+        all_low = True
+        for offset in range(5):
+            end_idx = len(qualifying) - offset  # includes final entry when offset=0
+            ema = _compute_ema_roi(qualifying[:end_idx])
+            if ema >= 0.1:
+                all_low = False
+                break
+        if all_low:
+            final_ema = _compute_ema_roi(qualifying)
+            return True, f"EMA ROI plateau (ema={final_ema:.3f} < 0.1 for last 5 entries)"
 
     return False, ""
 
@@ -299,7 +337,7 @@ def run_auto_improve(
         print(f"Scoring baseline...", file=sys.stderr)
 
     # Clear scorer cache for fresh reads
-    scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
+    scorer.invalidate_cache(skill_path)
     baseline = _score_skill(skill_path, eval_suite)
 
     if start_iteration == 0:
@@ -367,7 +405,7 @@ def run_auto_improve(
             # (actual worktree management requires git context)
 
         # Clear cache and compute gradients
-        scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
+        scorer.invalidate_cache(skill_path)
         gradients = gradient_mod.compute_gradients(
             skill_path, eval_suite=eval_suite, include_clarity=True
         )
@@ -385,25 +423,100 @@ def run_auto_improve(
                 print("No auto-applicable patches — only manual fixes remain", file=sys.stderr)
             break
 
-        # Save backup
+        # Top-3 exploration: try up to 3 patches, keep the best result
+        # (First 3 iterations use top-1 only to avoid wasted work on already-good skills)
+        explore_width = 1 if iteration <= 3 else min(3, len(patches))
+        candidates_to_try = patches[:explore_width]
+
         backup_content = Path(skill_path).read_text(encoding="utf-8")
 
-        # Apply top patch
-        top_patch = patches[0]
-        if verbose:
-            print(f"Applying: [{top_patch['dimension']}] {top_patch['issue']}", file=sys.stderr)
+        best_result = None  # (new_score, delta, patch, content_after)
+        best_delta = -float("inf")
+        patch_errors = []
 
-        if dry_run:
-            result = gradient_mod.apply_patches(skill_path, [top_patch], dry_run=True)
-        else:
-            result = gradient_mod.apply_patches(skill_path, [top_patch], dry_run=False)
+        for patch_candidate in candidates_to_try:
+            if verbose and explore_width > 1:
+                print(f"  Trying: [{patch_candidate['dimension']}] {patch_candidate['issue']}", file=sys.stderr)
+            elif verbose:
+                print(f"Applying: [{patch_candidate['dimension']}] {patch_candidate['issue']}", file=sys.stderr)
 
-        if result["errors"]:
-            if verbose:
-                print(f"Patch errors: {result['errors']}", file=sys.stderr)
-            # Restore backup
+            # Restore to baseline state before each candidate
             if not dry_run:
                 Path(skill_path).write_text(backup_content, encoding="utf-8")
+                scorer.invalidate_cache(skill_path)
+
+            if dry_run:
+                result = gradient_mod.apply_patches(skill_path, [patch_candidate], dry_run=True)
+            else:
+                result = gradient_mod.apply_patches(skill_path, [patch_candidate], dry_run=False)
+
+            if result["errors"]:
+                patch_errors.append((patch_candidate, result["errors"]))
+                if verbose:
+                    print(f"  Patch errors: {result['errors']}", file=sys.stderr)
+                continue
+
+            if result["applied"] == 0:
+                if verbose:
+                    print("  Patch had no effect — skipping", file=sys.stderr)
+                continue
+
+            # Score after patch
+            scorer.invalidate_cache(skill_path)
+            new_score = _score_skill(skill_path, eval_suite)
+            delta = round(new_score["composite"] - current_score["composite"], 1)
+
+            if verbose and explore_width > 1:
+                print(f"  Score: {current_score['composite']} → {new_score['composite']} (delta: {delta:+.1f})", file=sys.stderr)
+
+            # Dimension guard: reject patches that tank any dim by >15 points
+            regression = _has_dimension_regression(current_score, new_score, threshold=15)
+            if regression:
+                if verbose:
+                    dim_name, old_val, new_val = regression
+                    print(f"  Dimension guard: {dim_name} dropped {old_val} → {new_val}", file=sys.stderr)
+                continue
+
+            if delta > best_delta:
+                content_after = Path(skill_path).read_text(encoding="utf-8") if not dry_run else None
+                best_result = (new_score, delta, patch_candidate, content_after)
+                best_delta = delta
+
+        # Determine outcome from exploration
+        if best_result and best_delta >= 0:
+            new_score, delta, chosen_patch, content_after = best_result
+            status = "keep"
+            if not dry_run and content_after is not None:
+                Path(skill_path).write_text(content_after, encoding="utf-8")
+                scorer.invalidate_cache(skill_path)
+            current_score = new_score
+            if delta > 0:
+                improvements += 1
+            total_delta += delta
+            top_patch = chosen_patch
+            if verbose:
+                rel_roi = _compute_relative_roi(delta, current_score["composite"])
+                print(f"✓ Keep (composite: {new_score['composite']}, rel_roi: {rel_roi:.3f})", file=sys.stderr)
+        else:
+            status = "discard"
+            # Pick the first patch for logging if no best result
+            top_patch = candidates_to_try[0]
+            delta = best_delta if best_result else 0
+            new_score = current_score
+            # Revert
+            if not dry_run:
+                Path(skill_path).write_text(backup_content, encoding="utf-8")
+                scorer.invalidate_cache(skill_path)
+            if verbose:
+                if patch_errors and not best_result:
+                    print(f"✗ Discard (all {len(candidates_to_try)} patches had errors)", file=sys.stderr)
+                else:
+                    print(f"✗ Discard (best delta: {best_delta:+.1f})", file=sys.stderr)
+
+        # Handle case where all patches errored
+        if patch_errors and not best_result and all(
+            p[0] == c for p, c in zip(patch_errors, candidates_to_try)
+        ):
             entry = {
                 "iteration": iteration,
                 "status": "error",
@@ -411,44 +524,13 @@ def run_auto_improve(
                 "dimensions": current_score["dimensions"],
                 "delta": 0,
                 "patch_applied": f"{top_patch['dimension']}:{top_patch['issue']}",
-                "errors": result["errors"],
+                "errors": patch_errors[0][1],
                 "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
             }
             if not dry_run:
                 _append_state(skill_path, entry)
             state.append(entry)
             continue
-
-        if result["applied"] == 0:
-            if verbose:
-                print("Patch had no effect — skipping", file=sys.stderr)
-            continue
-
-        # Score after patch
-        scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
-        new_score = _score_skill(skill_path, eval_suite)
-        delta = round(new_score["composite"] - current_score["composite"], 1)
-
-        if verbose:
-            print(f"Score: {current_score['composite']} → {new_score['composite']} (delta: {delta:+.1f})", file=sys.stderr)
-
-        # Keep or revert
-        if delta >= 0:
-            status = "keep"
-            current_score = new_score
-            if delta > 0:
-                improvements += 1
-            total_delta += delta
-            if verbose:
-                print(f"✓ Keep (composite: {new_score['composite']})", file=sys.stderr)
-        else:
-            status = "discard"
-            # Revert
-            if not dry_run:
-                Path(skill_path).write_text(backup_content, encoding="utf-8")
-                scorer._file_cache.pop(str(Path(skill_path).resolve()), None)
-            if verbose:
-                print(f"✗ Discard (regression: {delta:+.1f})", file=sys.stderr)
 
         # Scoreboard line
         if verbose:
@@ -457,7 +539,8 @@ def run_auto_improve(
             filled = min(bar_w, int(round(sc / 100 * bar_w)))
             bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
             sym = "\u2713" if status == "keep" else "\u2717"
-            print(f"Iter {iteration:>2}:  {bar}  {sc:.1f}/100  [{delta:+.1f}]  {sym} {status} ({top_patch['dimension']})", file=sys.stderr)
+            explored = f" [{explore_width} explored]" if explore_width > 1 else ""
+            print(f"Iter {iteration:>2}:  {bar}  {sc:.1f}/100  [{delta:+.1f}]  {sym} {status} ({top_patch['dimension']}){explored}", file=sys.stderr)
 
         entry = {
             "iteration": iteration,

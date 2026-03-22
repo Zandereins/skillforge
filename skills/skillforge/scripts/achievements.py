@@ -225,11 +225,10 @@ def main() -> None:
     parser.add_argument("--check-only", action="store_true", help="Don't persist new unlocks")
     args = parser.parse_args()
 
-    import importlib
     try:
-        scorer = importlib.import_module("score-skill")
+        import score_skill as scorer
     except (ImportError, ModuleNotFoundError) as e:
-        print(f"Error: cannot import score-skill module: {e}", file=sys.stderr)
+        print(f"Error: cannot import score_skill module: {e}", file=sys.stderr)
         sys.exit(1)
 
     skill_path = str(Path(args.skill_path).resolve())

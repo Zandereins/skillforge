@@ -2,12 +2,12 @@
 
 Your Claude Code skills, automatically better.
 
-> 62.5 → 99.9 points. One command. Zero manual work.
+> 62.5 → 98.9 structural points. One command. Zero manual work.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests: 99/99](https://img.shields.io/badge/Tests-99%2F99_passing-brightgreen)](skills/skillforge/scripts/test-integration.sh)
-[![Score: 99.9](https://img.shields.io/badge/Structural_Score-99.9%2F100-blue)](skills/skillforge/scripts/score-skill.py)
-[![v5.0](https://img.shields.io/badge/Version-5.0-F59E0B)](CHANGELOG.md)
+[![Structural Score: 98.9](https://img.shields.io/badge/Structural_Score-98.9%2F100-blue)](skills/skillforge/scripts/score-skill.py)
+[![v5.1](https://img.shields.io/badge/Version-5.1-F59E0B)](CHANGELOG.md)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-8A2BE2)](https://docs.anthropic.com/en/docs/claude-code/skills)
 
 ---
@@ -45,17 +45,23 @@ Strong baseline! Run /skillforge:auto for final polish.
   SkillForge Health Dashboard: skillforge
 ======================================================================
 
-  Composite: ████████████████████  99.9/100  [S]
+  Structural Score: ████████████████████  99.0/100  [S]
     [7/8 dimensions, 91% coverage]
 
   Dimensions:
     structure       ██████████  100/100
-    triggers        ██████████  100/100
+    triggers        ██████████  95/100
     quality         ██████████  100/100
     edges           ██████████  100/100
     efficiency      █████████░  93/100
     composability   ██████████  100/100
     clarity         ██████████  100/100
+
+  Top 1 Improvements:
+  ------------------------------------------------------------
+    #1 [triggers] false_positives:2
+       Add 'Do NOT use for...' boundaries to exclude false-positive scenarios
+       delta: +3.5  |  priority: 0.42
 
   Achievements: ████░░░░░░  4/10
   ⚡ 🎯 💎 🟢
@@ -63,14 +69,42 @@ Strong baseline! Run /skillforge:auto for final polish.
 ======================================================================
 ```
 
-### Auto-Improve — Autonomous loop with sparklines and grade tracking
+### Doctor — Scan ALL installed skills at once
 
 ```
+======================================================================
+  SkillForge Doctor — Skill Health Check
+======================================================================
+
+  1 skills scanned | 1 healthy | 4 mesh issues
+
+  Skill                      Score  Grade   Dims  Issues  Action
+  --------------------------------------------------------------------
+  skillforge                   99    [S]    6/7       1  Healthy — consider runtime eval
+
+  Mesh Health: 68/100 (4 cross-skill issues)
+  Run /skillforge:mesh for details.
+
+  NOTE: Scores are STRUCTURAL — they measure file organization,
+  not runtime effectiveness. Use --runtime for validated scoring.
+
+======================================================================
+```
+
+### Auto-Improve — Autonomous loop with EMA-based stopping
+
+```
+Scoring baseline...
+Baseline: 98.9/100 (6 dims)
+
+--- Iteration 1 ---
+Stopping: composite >= 98 (98.9)
+
   SkillForge Auto-Improve Complete
   ──────────────────────────────────────────────────
-  Score:  100 → 100/100  ████████████████████  (+0.0)  [S]
+  Score:  99 → 99/100  ████████████████████  (+0.0)  [S]
   Iters:  0  |  Kept: 0  |  Time: 0s
-  Stop:   max_iterations
+  Stop:   composite >= 98 (98.9)
 ```
 
 ---
@@ -111,7 +145,7 @@ cp -r skillforge/commands/skillforge ~/.claude/commands/
 
 ```
 Baseline:  ██████░░░░░░░░░░░░░░  62.5/100  [C]
-After 18x: ████████████████████  99.9/100  [S]  (+37 points, zero human input)
+After 18x: ████████████████████  98.9/100  [S]  (+36 points, zero human input)
 ```
 
 What actually changed in a real run:
@@ -152,27 +186,57 @@ The loop applies patches, checks the score, and keeps or reverts each one. When 
 | `/skillforge:predict` | Best strategy from cross-session data |
 | `/skillforge:recall` | Search episodic memory for relevant past learnings |
 | `/skillforge:log-failure` | Log a skill failure for later triage |
+| `/skillforge:doctor` | Scan ALL installed skills, show health summary |
 
 ---
 
-## Quality Dimensions
+## Scoring Dimensions
 
-| Dimension | Weight | Grade | What It Measures |
-|-----------|--------|-------|-----------------|
-| Structure | 15% | S/A/B/C/D/F | Frontmatter, headers, examples, progressive disclosure |
-| Trigger Accuracy | 20% | S/A/B/C/D/F | TF-IDF keyword overlap against eval suite prompts |
-| Output Quality | 20% | S/A/B/C/D/F | Assertion breadth and eval suite coverage |
-| Edge Coverage | 15% | S/A/B/C/D/F | Edge case definitions and handling |
-| Token Efficiency | 10% | S/A/B/C/D/F | Information density, signal-to-noise ratio |
-| Composability | 5% | S/A/B/C/D/F | Scope boundaries, handoff declarations |
-| Clarity | *(bonus)* | S/A/B/C/D/F | Writing quality, readability, coherence |
-| Runtime *(opt-in)* | 15% | S/A/B/C/D/F | Actual Claude behavior against assertions |
+| Dimension | Weight | Grade | What It Measures | What It Does NOT Measure |
+|-----------|--------|-------|-----------------|-------------------------|
+| Structure | 15% | S/A/B/C/D/F | Frontmatter, headers, examples, progressive disclosure | Whether instructions are correct |
+| Trigger Accuracy | 20% | S/A/B/C/D/F | TF-IDF keyword overlap against eval suite prompts | Actual Claude triggering behavior |
+| Eval Coverage | 20% | S/A/B/C/D/F | Assertion breadth and eval suite coverage | Whether output is actually correct |
+| Edge Coverage | 15% | S/A/B/C/D/F | Edge case definitions in eval suite | Whether edges are handled at runtime |
+| Token Efficiency | 10% | S/A/B/C/D/F | Information density, signal-to-noise ratio | Whether content is useful to Claude |
+| Composability | 5% | S/A/B/C/D/F | Scope boundaries, handoff declarations | Whether skills work together |
+| Clarity | *(bonus)* | S/A/B/C/D/F | Contradictions, ambiguity, vague references | Whether instructions are clear to Claude |
+| Runtime *(opt-in)* | 15% | S/A/B/C/D/F | **Actual Claude behavior** against assertions | — |
 
 Grades: **S** (>=95), **A** (>=85), **B** (>=75), **C** (>=65), **D** (>=50), **F** (<50).
+
+> **Important:** The default composite score is a **structural lint score** — it measures
+> file organization and keyword coverage, not whether the skill actually works. A 99/100
+> skill with perfect structure can still fail at runtime. Enable `--runtime` or run
+> `/skillforge:eval` with runtime assertions for validated scoring.
 
 Weights auto-calibrate from runtime data when available. Override with `--weights "triggers=0.4,structure=0.3"`.
 
 ---
+
+## v5.1 Features (Latest)
+
+**Honest Scoring** — "Structural Score" everywhere instead of misleading "Quality Score". Transparent about what the number means.
+
+**Stemming Tokenizer** — Suffix-stripping replaces fixed synonym tables. Better keyword matching with zero maintenance.
+
+**Beam Search** — Top-3 exploration instead of greedy top-1 from iteration 4 onward. Finds better improvement paths.
+
+**EMA Plateau Detection** — Exponential Moving Average replaces fixed-window ROI. Smoother, more reliable stopping.
+
+**MinHash + LSH** — O(n) mesh analysis instead of O(n^2) for 50+ skills. Scales to large skill collections.
+
+**Context-aware Patches** — Generates meaningful descriptions instead of TODOs. Patches that actually help.
+
+**Doctor Command** — `skillforge doctor` scans ALL installed skills in one pass. Shows health summary with grades.
+
+**Dimension Guard** — Prevents patches that tank a single dimension by >15 points. No more trading one strength for another.
+
+**Coherence Check** — Instruction-assertion alignment as a quality bonus. Catches disconnects between what a skill says and what it tests.
+
+**40+ Pre-compiled Regex** — Performance optimization across the scorer. Faster scoring on large skills.
+
+**Public Cache API** — `invalidate_cache()` replaces direct `_file_cache.pop()`. Clean interface for cache management.
 
 ## v5.0 Features
 
@@ -180,9 +244,9 @@ Weights auto-calibrate from runtime data when available. Override with `--weight
 
 **Grade System** — Letter grades [S/A/B/C/D/F] on every dimension and composite score. Color-coded in terminal output.
 
-**Dimension Heatmap** — ASCII heatmap (░▒▓█) across iterations in reports. Shows which dimensions improved when.
+**Dimension Heatmap** — ASCII heatmap across iterations in reports. Shows which dimensions improved when.
 
-**Achievements** — Unlockable badges (⚡🎯💎🟢🏆...) for hitting milestones. Tracked per-skill, shown in dashboard and reports.
+**Achievements** — Unlockable badges for hitting milestones. Tracked per-skill, shown in dashboard and reports.
 
 **Init Auto-Discovery** — `init-skill.py` finds SKILL.md automatically, shows colored dimension bars and contextual next steps.
 
@@ -204,12 +268,15 @@ SkillForge scores itself. Dogfooding, not marketing.
 
 | Metric | Value |
 |--------|-------|
-| Structural Score | **99.9 / 100** [S] |
+| Structural Score | **98.9 / 100** [S] *(structural only — see note below)* |
 | Binary assertions | **25/25 passing** |
 | Integration tests | **87/87 passing** |
 | Self-tests | **12/12 passing** |
 | Total tests | **99/99 passing** |
-| Journey | v1.0 (62.5) → v5.0 (99.9) across 5 major versions |
+| Journey | v1.0 (62.5) → v5.1 (98.9) across 5 major versions |
+
+> The 98.9 score means "well-structured file" — not "perfect skill". Runtime
+> validation (`--runtime`) tests actual Claude behavior and is the true quality gate.
 
 27 security fixes applied from a 15-agent deep audit. It practices what it preaches.
 
@@ -233,7 +300,12 @@ skills/skillforge/
 │   ├── skill-mesh.py           # Multi-skill conflict detection + fixes
 │   ├── meta-report.py          # Strategy predictor + calibration
 │   ├── episodic-store.py       # Cross-session TF-IDF memory
+│   ├── doctor.py               # Health check for all installed skills
 │   ├── parallel-runner.py      # Git worktree parallel experiments
+│   ├── score_skill.py          # Underscore alias (Python import compat)
+│   ├── text_gradient.py        # Underscore alias
+│   ├── skill_mesh.py           # Underscore alias
+│   ├── parallel_runner.py      # Underscore alias
 │   ├── run-eval.sh             # Binary assertion engine
 │   ├── progress.py             # Convergence analysis
 │   ├── runtime-evaluator.py    # Live Claude invocation testing
@@ -263,6 +335,18 @@ skill-creator → v1 SKILL.md → /skillforge:auto → autonomous grinding → s
 ## License
 
 MIT — do whatever you want.
+
+---
+
+## Badge
+
+Score your skill and add this badge to your README:
+
+```markdown
+[![SkillForge: 98.9 [S]](https://img.shields.io/badge/SkillForge-98.9%2F100_%5BS%5D-brightgreen)](https://github.com/Zandereins/skillforge)
+```
+
+[![SkillForge: 98.9 [S]](https://img.shields.io/badge/SkillForge-98.9%2F100_%5BS%5D-brightgreen)](https://github.com/Zandereins/skillforge)
 
 ---
 

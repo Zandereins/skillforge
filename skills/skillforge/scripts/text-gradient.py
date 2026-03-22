@@ -22,9 +22,7 @@ from typing import Any, Optional
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-# importlib handles the hyphenated module name
-import importlib
-scorer = importlib.import_module("score-skill")
+import score_skill as scorer
 
 
 # --- Effort classification ---
@@ -594,7 +592,14 @@ def compute_gradients(
     if include_clarity:
         gradients.extend(_compute_clarity_gradients(skill_path))
 
-    # Normalize delta to float and compute priority
+    # Dimension weights from scorer (match composite formula)
+    DIM_WEIGHTS = {
+        "structure": 0.15, "triggers": 0.20, "quality": 0.20,
+        "edges": 0.15, "efficiency": 0.10, "composability": 0.05, "clarity": 0.05,
+    }
+    CONFIDENCE_MULT = {"high": 1.0, "medium": 0.6, "low": 0.3}
+
+    # Normalize delta to float and compute composite-weighted priority
     for g in gradients:
         raw_delta = g["delta"]
         parsed = _parse_delta(raw_delta)
@@ -602,8 +607,10 @@ def compute_gradients(
         if isinstance(raw_delta, str):
             g["delta_display"] = raw_delta
         g["delta"] = parsed
+        dim_weight = DIM_WEIGHTS.get(g["dimension"], 0.10)
+        conf_mult = CONFIDENCE_MULT.get(g.get("confidence", "medium"), 0.6)
         effort = g.get("effort", EFFORT_MODERATE)
-        g["priority"] = round(parsed / effort, 2)
+        g["priority"] = round((parsed * dim_weight * conf_mult) / effort, 4)
 
     # Sort by priority descending, with stable secondary sort by dimension+issue
     gradients.sort(key=lambda g: (-g["priority"], g["dimension"], g["issue"]))
@@ -661,6 +668,52 @@ def generate_patches(skill_path: str, gradients: list[dict]) -> list[dict]:
     name_match = re.search(r"^name:\s*(.+?)$", content, re.MULTILINE)
     skill_name = name_match.group(1).strip() if name_match else Path(skill_path).parent.name
 
+    # Extract body text (after frontmatter) for context-aware patch generation
+    body_text = content
+    if content.startswith("---"):
+        fm_end = content.find("---", 3)
+        if fm_end >= 0:
+            body_text = content[fm_end + 3:].strip()
+
+    # Extract meaningful terms from body for auto-generated descriptions
+    body_terms = scorer._tokenize_meaningful(body_text.lower())[:5] if body_text else []
+
+    # Extract first header text
+    first_header_match = re.search(r"^##?\s+(.+)$", body_text, re.MULTILINE)
+    first_header_text = first_header_match.group(1).strip() if first_header_match else ""
+
+    # Try to extract first sentence from ## Overview or first ## section
+    first_section_sentence = ""
+    overview_match = re.search(
+        r"^##\s+(?:Overview|Introduction)\s*\n+((?:[^\n#].*\n?)+)", body_text, re.MULTILINE
+    )
+    if not overview_match:
+        overview_match = re.search(
+            r"^##\s+\S.*\n+((?:[^\n#].*\n?)+)", body_text, re.MULTILINE
+        )
+    if overview_match:
+        section_text = overview_match.group(1).strip()
+        sentence_match = re.match(r"([^.!?]+[.!?])", section_text)
+        if sentence_match:
+            first_section_sentence = sentence_match.group(1).strip()
+
+    def _build_description() -> str:
+        """Build a meaningful description from skill body context."""
+        if first_section_sentence:
+            return first_section_sentence
+        if len(body_terms) >= 3:
+            return f"Skill for {body_terms[0]}, {body_terms[1]}, and {body_terms[2]}" + (
+                f" — {first_header_text}" if first_header_text else ""
+            )
+        if first_header_text:
+            return first_header_text
+        return f"TODO: describe what {skill_name} does and when to use it"
+
+    # Extract existing description and "when" clauses for scope patches
+    existing_desc = scorer._extract_description(content)
+    when_clauses = re.findall(r"(?i)(?:when|if)\s+(?:you|the|a)\s+(.+?)(?:\.|$)", body_text)
+    when_clauses = [c.strip() for c in when_clauses[:3] if len(c.strip()) > 10]
+
     for g in gradients:
         if g.get("confidence") != "high" or g.get("effort", 2) > EFFORT_SIMPLE:
             continue
@@ -668,10 +721,11 @@ def generate_patches(skill_path: str, gradients: list[dict]) -> list[dict]:
         patch = None
 
         if g["issue"] == "no_frontmatter":
+            desc = _build_description()
             patch = {
                 "op": "insert_before",
                 "line": 1,
-                "content": f"---\nname: {skill_name}\ndescription: >-\n  TODO: describe what this skill does and when to use it\n---\n",
+                "content": f"---\nname: {skill_name}\ndescription: >-\n  {desc}\n---\n",
             }
         elif g["issue"] == "missing_name" and lines and lines[0].strip() == "---":
             # Find end of frontmatter to insert name
@@ -684,12 +738,13 @@ def generate_patches(skill_path: str, gradients: list[dict]) -> list[dict]:
                     }
                     break
         elif g["issue"] == "missing_description" and lines and lines[0].strip() == "---":
+            desc = _build_description()
             for i, line in enumerate(lines[1:], 1):
                 if line.strip() == "---":
                     patch = {
                         "op": "insert_before",
                         "line": i + 1,
-                        "content": "description: >-\n  TODO: describe what this skill does and when to use it\n",
+                        "content": f"description: >-\n  {desc}\n",
                     }
                     break
         elif g["issue"].startswith("has_todo"):
@@ -705,17 +760,29 @@ def generate_patches(skill_path: str, gradients: list[dict]) -> list[dict]:
                     "content": "",
                 }
         elif g["issue"] == "no_scope_boundaries":
-            # Insert scope section before the last line
+            # Build scope from description and existing "when" clauses
+            if when_clauses:
+                positive_items = "\n".join(f"- {c}" for c in when_clauses)
+            elif existing_desc:
+                desc_terms = scorer._tokenize_meaningful(existing_desc.lower())[:4]
+                positive_items = "\n".join(f"- Working with {t}" for t in desc_terms) if desc_terms else f"- TODO: describe when to use {skill_name} vs alternatives"
+            else:
+                positive_items = f"- TODO: describe when to use {skill_name} vs alternatives"
             patch = {
                 "op": "append",
                 "line": len(lines),
-                "content": "\n## When to Use\n\nUse this skill when:\n- TODO: describe positive triggers\n\nDo NOT use for:\n- TODO: describe negative boundaries\n",
+                "content": f"\n## When to Use\n\nUse this skill when:\n{positive_items}\n\nDo NOT use for:\n- TODO: describe when to use {skill_name} vs alternatives\n",
             }
         elif g["issue"] == "no_handoff_points":
+            # Try to extract related skill references from body
+            if when_clauses:
+                handoff_items = "\n".join(f"- If {c}, consider a dedicated skill" for c in when_clauses[:2])
+            else:
+                handoff_items = f"- TODO: describe when to use {skill_name} vs alternatives"
             patch = {
                 "op": "append",
                 "line": len(lines),
-                "content": "\n## Related Skills\n\nThen use:\n- TODO: describe handoff points\n\nIf instead:\n- TODO: describe when to suggest other skills\n",
+                "content": f"\n## Related Skills\n\nThen use:\n- TODO: describe when to use {skill_name} vs alternatives\n\nIf instead:\n{handoff_items}\n",
             }
 
         if patch:
@@ -724,6 +791,34 @@ def generate_patches(skill_path: str, gradients: list[dict]) -> list[dict]:
             patch["issue"] = g["issue"]
             patch["delta"] = g["delta"]
             patches.append(patch)
+
+    # Generate regex-based removal patches for efficiency issues
+    for g in gradients:
+        if g["dimension"] != "efficiency":
+            continue
+
+        if g["issue"].startswith("excessive_hedging"):
+            patches.append({
+                "op": "remove_regex",
+                "pattern": r"you (might|could|should|may) (want to|consider|possibly) ",
+                "replacement": "",
+                "gradient_id": f"efficiency:{g['issue']}",
+                "dimension": "efficiency",
+                "issue": g["issue"],
+                "delta": 1.5,
+                "confidence": "high",
+            })
+        elif g["issue"].startswith("filler_phrases"):
+            patches.append({
+                "op": "remove_regex",
+                "pattern": r"(?i)(it is important to note that |as mentioned (above|earlier|before)[,.]?\s*|in other words[,.]?\s*|keep in mind that |note that |please note[,.]?\s*|remember that |be aware that )",
+                "replacement": "",
+                "gradient_id": f"efficiency:{g['issue']}",
+                "dimension": "efficiency",
+                "issue": g["issue"],
+                "delta": 1.0,
+                "confidence": "high",
+            })
 
     return patches
 
@@ -825,7 +920,7 @@ def apply_patches(skill_path: str, patches: list[dict], dry_run: bool = False) -
         Path(skill_path).write_text(new_content, encoding="utf-8")
         # Invalidate scorer cache for this file
         cache_key = str(Path(skill_path).resolve())
-        scorer._file_cache.pop(cache_key, None)
+        scorer.invalidate_cache(skill_path)
 
     return {
         "applied": applied,
