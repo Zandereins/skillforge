@@ -1485,8 +1485,8 @@ echo '{"exp":0,"status":"baseline","composite":50,"scores":{"structure":50}}' > 
 echo '{"exp":1,"status":"keep","composite":55,"delta":5,"description":"test"}' >> "$REPORT_JSONL"
 REPORT_OUT=$(python3 "$SCRIPT_DIR/generate-report.py" "$REPORT_JSONL" "$SKILL_DIR/SKILL.md" 2>/dev/null)
 rm -f "$REPORT_JSONL"
-if echo "$REPORT_OUT" | grep -q "Share this result"; then
-    pass "generate-report.py: share snippet present in report"
+if echo "$REPORT_OUT" | grep -q "## Share"; then
+    pass "generate-report.py: share badge + share snippet present in report"
 else
     fail "generate-report.py share" "share snippet not found"
 fi

@@ -2,7 +2,7 @@
 
 Your Claude Code skills, automatically better.
 
-> 62.5 → 99.9 structural points. One command. Zero manual work.
+> Trigger accuracy 63% → 89%. Efficiency 45 → 83. Structure 72 → 90. One command. Zero manual work.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests: 99/99](https://img.shields.io/badge/Tests-99%2F99_passing-brightgreen)](skills/skillforge/scripts/test-integration.sh)
@@ -109,25 +109,26 @@ Stopping: composite >= 98 (98.9)
 
 ---
 
-## 60-Second Quick Start
+## Quick Start
 
 ```bash
-# 1. Install (global — works across all projects)
-git clone https://github.com/Zandereins/skillforge.git
-cp -r skillforge/skills/skillforge ~/.claude/skills/
-cp -r skillforge/commands/skillforge ~/.claude/commands/
+# Install (one command)
+git clone https://github.com/Zandereins/skillforge.git && bash skillforge/install.sh
 
-# 2. Init — point at any SKILL.md, get baseline + eval suite
-/skillforge:init
+# Verify — see the health of all your installed skills
+/skillforge:doctor
 
-# 3. Improve — autonomous, walk away
+# Try it — run on the included demo skill
+/skillforge:init demo/bad-skill/SKILL.md
+
+# Improve any skill — autonomous, walk away
 /skillforge:auto
 
-# 4. Report — shareable before/after results
+# Share — get your badge
 /skillforge:report
 ```
 
-**Prerequisites:** Python 3.9+, Bash, Git, jq
+**Prerequisites:** Python 3.9+, Bash, Git, jq — the installer checks all of these.
 
 ---
 
@@ -135,6 +136,7 @@ cp -r skillforge/commands/skillforge ~/.claude/commands/
 
 | Step | You Do | SkillForge Does |
 |------|--------|-----------------|
+| **Doctor** | Run one command | See health grades for ALL your installed skills |
 | **Init** | Point at a SKILL.md | Auto-discovers file, generates eval suite, scores baseline with grade badge |
 | **Improve** | Walk away | Applies fixes, reverts regressions, stops when ROI drops |
 | **Report** | Share the markdown | Before/after table, heatmap, achievements, recommendations |
@@ -174,6 +176,7 @@ The loop applies patches, checks the score, and keeps or reverts each one. When 
 | Command | What It Does |
 |---------|--------------|
 | `/skillforge` | Full autonomous loop with GOAL + METRIC |
+| `/skillforge:doctor` | Scan ALL installed skills, show health summary |
 | `/skillforge:auto` | Self-driving auto-improve (deterministic patches, no prompts) |
 | `/skillforge:init` | Bootstrap eval suite + baseline from any SKILL.md |
 | `/skillforge:analyze` | One-shot gap analysis with ranked recommendations |
@@ -186,7 +189,6 @@ The loop applies patches, checks the score, and keeps or reverts each one. When 
 | `/skillforge:predict` | Best strategy from cross-session data |
 | `/skillforge:recall` | Search episodic memory for relevant past learnings |
 | `/skillforge:log-failure` | Log a skill failure for later triage |
-| `/skillforge:doctor` | Scan ALL installed skills, show health summary |
 
 ---
 
