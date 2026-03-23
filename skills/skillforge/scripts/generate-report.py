@@ -141,6 +141,7 @@ def _grade_badge_color(grade: str) -> str:
         "B": "yellowgreen",
         "C": "yellow",
         "D": "orange",
+        "E": "red",
         "F": "red",
     }.get(grade, "lightgrey")
 

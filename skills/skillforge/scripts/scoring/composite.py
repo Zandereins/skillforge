@@ -63,8 +63,8 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
         "quality": 0.20,
         "edges": 0.15,
         "efficiency": 0.10,
-        "composability": 0.05,
-        "runtime": 0.15,
+        "composability": 0.10,
+        "runtime": 0.10,
     }
 
     # Apply custom weights if provided (highest priority)

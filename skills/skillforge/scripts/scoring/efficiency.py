@@ -86,19 +86,16 @@ def score_efficiency(skill_path: str) -> dict:
     # Density = signal per 100 words, penalized by noise
     density = ((signal_count - noise_count) / max(total_words, 1)) * 100
 
-    # Map density to score
-    if density >= 8:
-        score = 95
-    elif density >= 5:
-        score = 85
-    elif density >= 3:
-        score = 75
-    elif density >= 1.5:
-        score = 65
-    elif density >= 0.5:
-        score = 55
-    else:
+    # Map density to score — continuous (no step-function cliffs).
+    # Uses sqrt curve calibrated to match previous step midpoints:
+    #   density 0→40, 0.5→52, 1.5→61, 3→70, 5→79, 8→89, 10→95
+    if density <= 0:
         score = 40
+    elif density >= 10:
+        score = 95
+    else:
+        score = 40 + (density / 10) ** 0.5 * 55
+    score = min(95, max(40, score))
 
     # Penalty for excessive length without proportional signal
     if total_words > 2000 and density < 3:

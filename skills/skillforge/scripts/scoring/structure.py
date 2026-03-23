@@ -5,7 +5,7 @@ imperative voice, referenced files, and dead content.
 """
 from pathlib import Path
 
-from shared import read_skill_safe
+from shared import read_skill_safe, strip_frontmatter
 from scoring.patterns import (
     _RE_FRONTMATTER_NAME, _RE_FRONTMATTER_DESC, _RE_REAL_EXAMPLES,
     _RE_CODE_BLOCKS, _RE_HEADERS, _RE_HEDGING, _RE_REFS, _RE_TODO,
@@ -30,6 +30,11 @@ def _score_structure_inline(skill_path: str) -> dict:
         content = read_skill_safe(skill_path)
     except (FileNotFoundError, ValueError):
         return {"score": 0, "issues": ["file_not_found"], "details": {}}
+
+    # Early return for empty or nearly empty skill bodies
+    body = strip_frontmatter(content)
+    if len(body.strip()) < 10:
+        return {"score": 0, "issues": ["empty_skill_body"], "details": {}}
 
     lines = content.split("\n")
 
@@ -88,12 +93,18 @@ def _score_structure_inline(skill_path: str) -> dict:
 
     # Referenced files exist
     refs = set(_RE_REFS.findall(content))
-    missing = [r for r in refs if not (skill_dir / r).exists()]
-    if not missing:
-        score += 10
-    else:
+    if not refs:
+        # No references declared — neutral score (not rewarded, not penalized)
         score += 5
-        issues.append(f"missing_refs: {missing}")
+    else:
+        missing = [r for r in refs if not (skill_dir / r).exists()]
+        if not missing:
+            # All declared references exist — reward completeness
+            score += 10
+        else:
+            # Some references missing — partial credit
+            score += 5
+            issues.append(f"missing_refs: {missing}")
 
     # No dead content (TODO/FIXME/placeholder, empty sections)
     todo_count = len(_RE_TODO.findall(content))

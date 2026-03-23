@@ -8,6 +8,7 @@ Scoring (100 pts total):
 - Assertions cover multiple types (contains, pattern, excludes, format): 25 pts
 - Test cases cover different skill features (analyze, improve, report): 25 pts
 - All assertions have descriptions: 20 pts
+- Base score capped at 90; coherence bonus (0-10) fills gap to 100
 """
 from typing import Optional
 
@@ -113,12 +114,15 @@ def score_quality(skill_path: str, eval_suite: Optional[dict]) -> dict:
         issues.append("no_assertions")
 
     # 5. Instruction-assertion coherence bonus (up to +10 pts)
+    # Cap base quality at 90 so coherence always has room to matter.
+    # Coherence bonus (0-10) fills the remaining gap to 100.
+    base_score = min(score, 90)
     coherence = score_coherence(skill_path, eval_suite)
     coherence_bonus = coherence["bonus"]
-    score += coherence_bonus
+    score = min(base_score + coherence_bonus, 100)
 
     return {
-        "score": min(score, 100),
+        "score": score,
         "issues": issues,
         "details": {
             "test_case_count": len(test_cases),

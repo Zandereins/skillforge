@@ -27,7 +27,7 @@ def is_color_tty() -> bool:
 # ---------------------------------------------------------------------------
 
 _GRADE_THRESHOLDS = [
-    (95, "S"), (85, "A"), (75, "B"), (65, "C"), (50, "D"),
+    (95, "S"), (85, "A"), (75, "B"), (65, "C"), (50, "D"), (35, "E"),
 ]
 
 _GRADE_COLORS = {
@@ -36,6 +36,7 @@ _GRADE_COLORS = {
     "B": "\x1b[32m",  # green
     "C": "\x1b[33m",  # yellow
     "D": "\x1b[31m",  # red
+    "E": "\x1b[31m",  # red
     "F": "\x1b[31m",  # red
 }
 
@@ -43,7 +44,7 @@ RESET = "\x1b[0m"
 
 
 def score_to_grade(score: float) -> str:
-    """Map composite score to letter grade: S(>=95) A(>=85) B(>=75) C(>=65) D(>=50) F(<50)."""
+    """Map composite score to letter grade: S(>=95) A(>=85) B(>=75) C(>=65) D(>=50) E(>=35) F(<35)."""
     for threshold, grade in _GRADE_THRESHOLDS:
         if score >= threshold:
             return grade
