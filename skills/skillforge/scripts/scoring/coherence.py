@@ -6,7 +6,7 @@ assertion values in the eval suite's test_cases. Returns a bonus score
 """
 from typing import Optional
 
-from shared import read_skill_safe
+from shared import read_skill_safe, strip_frontmatter
 from nlp import STOPWORDS, stem as _stem, RE_WORD_TOKEN as _RE_WORD_TOKEN
 from scoring.patterns import _RE_IMPERATIVE_INSTRUCTION
 
@@ -27,11 +27,7 @@ def score_coherence(skill_path: str, eval_suite: Optional[dict]) -> dict:
         return {"bonus": 0, "details": {"reason": "file_not_found"}}
 
     # Strip frontmatter
-    body = content
-    if content.startswith("---"):
-        end = content.find("---", 3)
-        if end > 0:
-            body = content[end + 3:]
+    body = strip_frontmatter(content)
 
     # 1. Extract imperative instruction topics from skill body
     instruction_topics = set()

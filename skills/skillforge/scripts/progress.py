@@ -242,18 +242,6 @@ class ProgressAnalyzer:
         else:
             return f"{seconds / 3600:.1f}h"
 
-    # --- Strategy types for meta-learning ---
-    STRATEGY_TYPES = [
-        "trigger_expansion",
-        "example_addition",
-        "noise_reduction",
-        "edge_coverage",
-        "structural_fix",
-        "progressive_disclosure",
-        "composability_fix",
-        "recovery_combo",
-    ]
-
     # Keywords used to infer strategy type from experiment descriptions
     _STRATEGY_KEYWORDS = {
         "trigger_expansion": ["synonym", "trigger", "description", "boundary", "negative boundary"],

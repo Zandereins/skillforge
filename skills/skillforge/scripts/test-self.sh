@@ -42,11 +42,19 @@ MEASURED=$(echo "$SELF_SCORE" | python3 -c "import sys,json; print(json.load(sys
 
 # Composite should be >= 90 (SkillForge should practice what it preaches)
 COMPOSITE=$(echo "$SELF_SCORE" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
-python3 -c "exit(0 if float('$COMPOSITE') >= 90 else 1)" 2>/dev/null && \
+python3 -c "import sys; exit(0 if float(sys.argv[1]) >= 90 else 1)" "$COMPOSITE" 2>/dev/null && \
     pass "Composite >= 90 (got $COMPOSITE)" || fail "Composite $COMPOSITE < 90"
 
 # Each dimension should be >= 70
-echo "$SELF_SCORE" | python3 -c "
+while read -r line; do
+    if [[ "$line" == SKIP:* ]]; then
+        pass "Dimension ${line#SKIP:} (opt-in, skipped)"
+    elif [[ "$line" == LOW:* ]]; then
+        fail "Dimension ${line#LOW:} below 70"
+    else
+        pass "Dimension ${line#OK:} >= 70"
+    fi
+done < <(echo "$SELF_SCORE" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 for dim, score in d['dimensions'].items():
@@ -56,15 +64,7 @@ for dim, score in d['dimensions'].items():
         print(f'LOW:{dim}={score}')
     else:
         print(f'OK:{dim}={score}')
-" 2>/dev/null | while read -r line; do
-    if [[ "$line" == SKIP:* ]]; then
-        pass "Dimension ${line#SKIP:} (opt-in, skipped)"
-    elif [[ "$line" == LOW:* ]]; then
-        fail "Dimension ${line#LOW:} below 70"
-    else
-        pass "Dimension ${line#OK:} >= 70"
-    fi
-done
+" 2>/dev/null)
 
 # No warnings should be present
 WARNINGS=$(echo "$SELF_SCORE" | python3 -c "import sys,json; w=json.load(sys.stdin)['warnings']; print(len(w))" 2>/dev/null)
@@ -83,12 +83,12 @@ echo "$EVAL_RESULT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/
 # Pass rate should be >= 80% (100% locally, CI may have env differences)
 PASS_PCT=$(echo "$EVAL_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pass_rate']['percentage'])" 2>/dev/null)
 PASS_TOTAL=$(echo "$EVAL_RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin)['pass_rate']; print(f\"{d['passed']}/{d['total']}\")" 2>/dev/null)
-python3 -c "exit(0 if int('${PASS_PCT:-0}') >= 80 else 1)" 2>/dev/null && \
+python3 -c "import sys; exit(0 if int(sys.argv[1]) >= 80 else 1)" "${PASS_PCT:-0}" 2>/dev/null && \
     pass "Pass rate ${PASS_PCT}% ($PASS_TOTAL static assertions)" || fail "Pass rate ${PASS_PCT}% ($PASS_TOTAL) below 80%"
 
 # Composite from eval should match standalone scorer
 EVAL_COMP=$(echo "$EVAL_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
-python3 -c "exit(0 if abs(float('$EVAL_COMP') - float('$COMPOSITE')) < 1 else 1)" 2>/dev/null && \
+python3 -c "import sys; exit(0 if abs(float(sys.argv[1]) - float(sys.argv[2])) < 1 else 1)" "$EVAL_COMP" "$COMPOSITE" 2>/dev/null && \
     pass "Eval composite matches scorer ($EVAL_COMP ≈ $COMPOSITE)" || \
     fail "Eval composite $EVAL_COMP != scorer $COMPOSITE"
 
@@ -120,7 +120,7 @@ section "Clarity: Self-measure instruction quality"
 
 CLARITY_RESULT=$(python3 "$SCRIPT_DIR/score-skill.py" "$SKILL_DIR/SKILL.md" --json --clarity 2>&1)
 CLARITY_SCORE=$(echo "$CLARITY_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['dimensions']['clarity'])" 2>/dev/null)
-python3 -c "exit(0 if int('$CLARITY_SCORE') >= 80 else 1)" 2>/dev/null && \
+python3 -c "import sys; exit(0 if int(sys.argv[1]) >= 80 else 1)" "$CLARITY_SCORE" 2>/dev/null && \
     pass "Clarity >= 80 (got $CLARITY_SCORE)" || fail "Clarity $CLARITY_SCORE < 80"
 
 # No contradictions in own SKILL.md
@@ -137,10 +137,10 @@ section "Regression Guard: SKILL.md line count"
 ##############################################################################
 
 LINE_COUNT=$(wc -l < "$SKILL_DIR/SKILL.md" | tr -d ' ')
-python3 -c "exit(0 if int('$LINE_COUNT') <= 300 else 1)" 2>/dev/null && \
+python3 -c "import sys; exit(0 if int(sys.argv[1]) <= 300 else 1)" "$LINE_COUNT" 2>/dev/null && \
     pass "SKILL.md <= 300 lines ($LINE_COUNT)" || fail "SKILL.md has $LINE_COUNT lines (max 300)"
 
-python3 -c "exit(0 if int('$LINE_COUNT') >= 100 else 1)" 2>/dev/null && \
+python3 -c "import sys; exit(0 if int(sys.argv[1]) >= 100 else 1)" "$LINE_COUNT" 2>/dev/null && \
     pass "SKILL.md >= 100 lines ($LINE_COUNT)" || fail "SKILL.md suspiciously short ($LINE_COUNT lines)"
 
 ##############################################################################

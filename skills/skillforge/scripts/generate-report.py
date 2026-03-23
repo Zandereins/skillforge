@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 """SkillForge Report Generator
 
 Combines improvement history (JSONL) + current score into a shareable
@@ -8,6 +7,7 @@ GitHub-flavored markdown report.
 Usage:
     python3 generate-report.py results.jsonl SKILL.md [--output FILE] [--json]
 """
+from __future__ import annotations
 
 import argparse
 import importlib.util
@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 SCRIPT_DIR = Path(__file__).parent
+
+from shared import load_jsonl_safe, read_skill_safe
 
 # Import terminal_art for grade system and heatmap
 from terminal_art import score_to_grade, render_heatmap
@@ -112,23 +114,6 @@ def load_progress(results_path: str) -> dict[str, Any]:
 from terminal_art import progress_bar as render_progress_bar
 
 
-def _load_jsonl_entries(path: str) -> list[dict]:
-    """Load all entries from a JSONL file, skipping malformed lines."""
-    entries: list[dict] = []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        entries.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-    except OSError:
-        pass
-    return entries
-
-
 def trend_arrow(trend: str) -> str:
     """Map trend string to a unicode arrow."""
     return {"improving": "\u2191", "stable": "\u2192", "declining": "\u2193"}.get(trend, "\u2014")
@@ -174,8 +159,8 @@ def _build_badge_markdown(score: float, grade: str) -> str:
 def _extract_skill_name_from_frontmatter(skill_path: str) -> Optional[str]:
     """Extract the name field from YAML frontmatter, returns None on failure."""
     try:
-        content = Path(skill_path).read_text(encoding="utf-8")
-    except OSError:
+        content = read_skill_safe(skill_path)
+    except (OSError, ValueError):
         return None
     match = re.search(r'^name:\s*"?(.+?)"?\s*$', content, re.MULTILINE)
     if match:
@@ -284,7 +269,7 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
     _results_path = progress.get("_results_path")
     if render_heatmap is not None and _results_path:
         try:
-            _raw_entries = _load_jsonl_entries(_results_path)
+            _raw_entries = load_jsonl_safe(_results_path)
             _heatmap_iters = [
                 {"dimensions": e["scores"]}
                 for e in _raw_entries
@@ -388,7 +373,7 @@ def format_report(skill_name: str, progress: dict[str, Any], current: dict[str, 
     # Achievements badge line
     if achievements_mod is not None and _results_path:
         try:
-            _ach_state = _load_jsonl_entries(_results_path)
+            _ach_state = load_jsonl_safe(_results_path)
             _ach_current = {
                 "composite": current_composite,
                 "dimensions": current_dims,

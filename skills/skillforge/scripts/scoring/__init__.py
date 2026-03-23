@@ -14,7 +14,7 @@ from scoring.structure import score_structure
 from scoring.triggers import score_triggers
 from scoring.efficiency import score_efficiency
 from scoring.composability import score_composability
-from scoring.coherence import score_coherence
+from scoring.coherence import score_coherence  # Note: returns {bonus, details} not {score, issues, details} — used internally by quality.py
 from scoring.quality import score_quality
 from scoring.edges import score_edges
 from scoring.runtime import score_runtime

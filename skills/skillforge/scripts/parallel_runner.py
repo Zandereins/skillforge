@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 """SkillForge Parallel Runner — Worktree-based Parallel Experimentation
 
 When stuck (5+ consecutive discards) or gap-to-target > 15,
@@ -13,6 +12,7 @@ Usage:
 
 Fallback: sequential mode if git worktree is unavailable.
 """
+from __future__ import annotations
 
 import argparse
 import json

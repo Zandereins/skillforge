@@ -22,7 +22,7 @@ def score_structure(skill_path: str) -> dict:
 
 
 def _score_structure_inline(skill_path: str) -> dict:
-    """Fallback structural scoring without the bash script."""
+    """Score structural quality of a SKILL.md file."""
     score = 0
     issues = []
 

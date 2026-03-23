@@ -85,11 +85,15 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
                 weights = {k: v / total_w for k, v in calibrated.items()}
 
     # If clarity is present, add it with weight 0.05 redistributed proportionally
-    if "clarity" in scores:
+    if "clarity" in scores and "clarity" not in (custom_weights or {}):
         clarity_weight = 0.05
         scale = (1.0 - clarity_weight) / sum(weights.values())
         weights = {k: v * scale for k, v in weights.items()}
         weights["clarity"] = clarity_weight
+        # Safety: ensure weights sum to 1.0
+        total = sum(weights.values())
+        if abs(total - 1.0) > 1e-9:
+            weights = {k: v / total for k, v in weights.items()}
 
     total = 0.0
     weight_sum = 0.0

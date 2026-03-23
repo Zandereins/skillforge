@@ -182,6 +182,10 @@ if [ "$MODE" = "update" ]; then
         cp -r "$COMMANDS_DST" "$CMDS_BACKUP"
         ok "Backed up existing commands to $CMDS_BACKUP"
     fi
+
+    # Clean up old backups, keep most recent 3
+    ls -dt "$HOME/.claude/skills/skillforge.bak."* 2>/dev/null | tail -n +4 | xargs rm -rf 2>/dev/null
+    ls -dt "$HOME/.claude/commands/skillforge.bak."* 2>/dev/null | tail -n +4 | xargs rm -rf 2>/dev/null
 fi
 
 # --- Install ---

@@ -72,6 +72,25 @@ function readFailures(failuresPath) {
   return entries;
 }
 
+function acquireLock(failuresPath) {
+  const lockPath = failuresPath + ".lock";
+  try {
+    fs.mkdirSync(lockPath); // mkdir is atomic on all platforms
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function releaseLock(failuresPath) {
+  const lockPath = failuresPath + ".lock";
+  try {
+    fs.rmdirSync(lockPath);
+  } catch {
+    /* ignore — lock may already be gone */
+  }
+}
+
 function markInjected(failuresPath, entries) {
   const lines = entries.map((e) => {
     if (!e.injected) e.injected = true;
@@ -131,33 +150,46 @@ function main() {
         "failures.jsonl",
       );
 
-      const entries = readFailures(failuresPath);
-      const untriaged = entries.filter((e) => !e.injected);
+      // Advisory lock to prevent concurrent read-modify-write races
+      if (!acquireLock(failuresPath)) {
+        // Another process holds the lock — skip injection this time
+        process.stdout.write("{}");
+        return;
+      }
 
-      if (untriaged.length >= MIN_UNTRIAGED) {
-        // Cluster by skill + failure_type
-        const clusters = {};
-        for (const entry of untriaged) {
-          const key = `${sanitize(entry.skill)}:${sanitize(entry.failure_type)}`;
-          if (!clusters[key]) clusters[key] = { count: 0, examples: [] };
-          clusters[key].count++;
-          if (clusters[key].examples.length < 2) {
-            clusters[key].examples.push(
-              sanitize(entry.assertion_id || entry.description || "no details"),
-            );
+      try {
+        const entries = readFailures(failuresPath);
+        const untriaged = entries.filter((e) => !e.injected);
+
+        if (untriaged.length >= MIN_UNTRIAGED) {
+          // Cluster by skill + failure_type
+          const clusters = {};
+          for (const entry of untriaged) {
+            const key = `${sanitize(entry.skill)}:${sanitize(entry.failure_type)}`;
+            if (!clusters[key]) clusters[key] = { count: 0, examples: [] };
+            clusters[key].count++;
+            if (clusters[key].examples.length < 2) {
+              clusters[key].examples.push(
+                sanitize(
+                  entry.assertion_id || entry.description || "no details",
+                ),
+              );
+            }
           }
+
+          let summary = `SkillForge: ${untriaged.length} untriaged failures detected.\n`;
+          for (const [key, clusterData] of Object.entries(clusters)) {
+            summary += `  - ${key}: ${clusterData.count} failures (e.g., ${clusterData.examples.join(", ")})\n`;
+          }
+          summary += `Run /skillforge:triage to investigate and auto-generate fixes.`;
+
+          context = { additionalContext: summary };
+
+          // Mark as injected
+          markInjected(failuresPath, entries);
         }
-
-        let summary = `SkillForge: ${untriaged.length} untriaged failures detected.\n`;
-        for (const [key, clusterData] of Object.entries(clusters)) {
-          summary += `  - ${key}: ${clusterData.count} failures (e.g., ${clusterData.examples.join(", ")})\n`;
-        }
-        summary += `Run /skillforge:triage to investigate and auto-generate fixes.`;
-
-        context = { additionalContext: summary };
-
-        // Mark as injected
-        markInjected(failuresPath, entries);
+      } finally {
+        releaseLock(failuresPath);
       }
     } catch (err) {
       process.stderr.write(

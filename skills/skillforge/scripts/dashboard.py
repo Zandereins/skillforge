@@ -17,35 +17,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
 
-def _is_color_tty() -> bool:
-    """Check if stdout supports ANSI colors."""
-    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty() and not os.environ.get("NO_COLOR")
-
-
-def _colored_bar(score: int, bar_w: int = 10) -> str:
-    """Render a gauge bar, optionally colored by score threshold."""
-    filled = min(bar_w, int(round(score / 100 * bar_w)))
-    bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
-    if not _is_color_tty():
-        return bar
-    if score >= 80:
-        return f"\x1b[32m{bar}\x1b[0m"  # green
-    elif score >= 60:
-        return f"\x1b[33m{bar}\x1b[0m"  # yellow
-    else:
-        return f"\x1b[31m{bar}\x1b[0m"  # red
-
 # Import sibling modules via underscore aliases (clean Python imports)
 SCRIPT_DIR = Path(__file__).parent
 
-# Import terminal_art for grade system
-from terminal_art import score_to_grade, grade_colored
+# Import terminal_art for grade system and shared helpers
+from terminal_art import score_to_grade, grade_colored, colored_bar as _colored_bar
 from shared import load_jsonl_safe, read_skill_safe
 
 

@@ -40,7 +40,7 @@ section "1. score-skill.py — Basic Functionality"
 # Test: scores its own SKILL.md correctly
 RESULT=$(python3 "$SCRIPT_DIR/score-skill.py" "$SKILL_DIR/SKILL.md" --json 2>&1)
 COMPOSITE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
-if [[ -n "$COMPOSITE" ]] && python3 -c "exit(0 if float('$COMPOSITE') >= 75 else 1)" 2>/dev/null; then
+if [[ -n "$COMPOSITE" ]] && python3 -c "import sys; exit(0 if float(sys.argv[1]) >= 75 else 1)" "$COMPOSITE" 2>/dev/null; then
     pass "Self-score composite >= 75 (got $COMPOSITE)"
 else
     fail "Self-score" "composite=$COMPOSITE, expected >= 75"
@@ -192,11 +192,11 @@ bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json
 if [[ -f "$JSONL_LOG" ]]; then
     MISSING_FIELDS=$(python3 -c "
 import sys,json
-d = json.loads(open('$JSONL_LOG').readline())
+d = json.loads(open(sys.argv[1]).readline())
 expected = ['exp','timestamp','commit','scores','pass_rate','composite','delta','status','strategy_type','description','duration_ms','tokens_estimated']
 missing = [f for f in expected if f not in d]
 print(','.join(missing) if missing else 'none')
-" 2>/dev/null)
+" "$JSONL_LOG" 2>/dev/null)
     if [[ "$MISSING_FIELDS" == "none" ]]; then
         pass "JSONL log has all progress.py fields"
     else
@@ -205,10 +205,10 @@ print(','.join(missing) if missing else 'none')
 
     # Test: scores field is a dict (not string)
     SCORES_TYPE=$(python3 -c "
-import json
-d = json.loads(open('$JSONL_LOG').readline())
+import sys,json
+d = json.loads(open(sys.argv[1]).readline())
 print(type(d.get('scores')).__name__)
-" 2>/dev/null)
+" "$JSONL_LOG" 2>/dev/null)
     if [[ "$SCORES_TYPE" == "dict" ]]; then
         pass "JSONL scores field is dict (not string)"
     else
@@ -372,7 +372,7 @@ Example 1: input → output
 UEOF
 UNICODE_RESULT=$(python3 "$SCRIPT_DIR/score-skill.py" "$UNICODE_SKILL" --json 2>&1)
 UNICODE_COMPOSITE=$(echo "$UNICODE_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
-if [[ -n "$UNICODE_COMPOSITE" ]] && python3 -c "exit(0 if float('$UNICODE_COMPOSITE') > 0 else 1)" 2>/dev/null; then
+if [[ -n "$UNICODE_COMPOSITE" ]] && python3 -c "import sys; exit(0 if float(sys.argv[1]) > 0 else 1)" "$UNICODE_COMPOSITE" 2>/dev/null; then
     pass "Unicode skill file scored (composite=$UNICODE_COMPOSITE)"
 else
     fail "Unicode file" "failed to score, composite=$UNICODE_COMPOSITE"
@@ -448,7 +448,7 @@ t = json.load(sys.stdin)['time']['total_seconds']
 # Last 2 exps: 1000ms + 2500ms = 3500ms = 3.5s
 print(t)
 " 2>/dev/null)
-if python3 -c "exit(0 if abs(float('$SINCE_TIME') - 3.5) < 0.1 else 1)" 2>/dev/null; then
+if python3 -c "import sys; exit(0 if abs(float(sys.argv[1]) - 3.5) < 0.1 else 1)" "$SINCE_TIME" 2>/dev/null; then
     pass "--since 2 → time from last 2 only ($SINCE_TIME s)"
 else
     fail "--since time" "expected ~3.5s, got $SINCE_TIME"
@@ -477,11 +477,10 @@ section "9. explain_score_change() (score-skill.py)"
 ##############################################################################
 
 # Test explain_score_change via Python direct import
-EXPLAIN_TESTS=$(python3 -c "
+EXPLAIN_TESTS=$(PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
 from importlib.util import spec_from_file_location, module_from_spec
-spec = spec_from_file_location('score_skill', '$SCRIPT_DIR/score-skill.py')
+spec = spec_from_file_location('score_skill', sys.argv[1])
 mod = module_from_spec(spec)
 spec.loader.exec_module(mod)
 
@@ -559,7 +558,7 @@ print(f'{passed},{failed}')
 if errors:
     for e in errors:
         print(f'  ERR: {e}', file=sys.stderr)
-" 2>&1)
+" "$SCRIPT_DIR/score-skill.py" 2>&1)
 EXPLAIN_PASSED=$(echo "$EXPLAIN_TESTS" | head -1 | cut -d, -f1)
 EXPLAIN_FAILED=$(echo "$EXPLAIN_TESTS" | head -1 | cut -d, -f2)
 if [[ "$EXPLAIN_FAILED" == "0" ]]; then
@@ -572,11 +571,10 @@ fi
 section "10. _extract_description() (score-skill.py)"
 ##############################################################################
 
-EXTRACT_TESTS=$(python3 -c "
+EXTRACT_TESTS=$(PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
 from importlib.util import spec_from_file_location, module_from_spec
-spec = spec_from_file_location('score_skill', '$SCRIPT_DIR/score-skill.py')
+spec = spec_from_file_location('score_skill', sys.argv[1])
 mod = module_from_spec(spec)
 spec.loader.exec_module(mod)
 
@@ -637,7 +635,7 @@ print(f'{passed},{failed}')
 if errors:
     for e in errors:
         print(f'  ERR: {e}', file=sys.stderr)
-" 2>&1)
+" "$SCRIPT_DIR/score-skill.py" 2>&1)
 EXTRACT_PASSED=$(echo "$EXTRACT_TESTS" | head -1 | cut -d, -f1)
 EXTRACT_FAILED=$(echo "$EXTRACT_TESTS" | head -1 | cut -d, -f2)
 if [[ "$EXTRACT_FAILED" == "0" ]]; then
@@ -650,11 +648,10 @@ fi
 section "11. _infer_strategy() (progress.py)"
 ##############################################################################
 
-INFER_TESTS=$(python3 -c "
+INFER_TESTS=$(PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
 from importlib.util import spec_from_file_location, module_from_spec
-spec = spec_from_file_location('progress', '$SCRIPT_DIR/progress.py')
+spec = spec_from_file_location('progress', sys.argv[1])
 mod = module_from_spec(spec)
 spec.loader.exec_module(mod)
 
@@ -716,7 +713,7 @@ print(f'{passed},{failed}')
 if errors:
     for e in errors:
         print(f'  ERR: {e}', file=sys.stderr)
-" 2>&1)
+" "$SCRIPT_DIR/progress.py" 2>&1)
 INFER_PASSED=$(echo "$INFER_TESTS" | head -1 | cut -d, -f1)
 INFER_FAILED=$(echo "$INFER_TESTS" | head -1 | cut -d, -f2)
 if [[ "$INFER_FAILED" == "0" ]]; then
@@ -729,11 +726,10 @@ fi
 section "12. classify_eval_health() (progress.py)"
 ##############################################################################
 
-HEALTH_TESTS=$(python3 -c "
+HEALTH_TESTS=$(PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 import sys, tempfile, json, os
-sys.path.insert(0, '$SCRIPT_DIR')
 from importlib.util import spec_from_file_location, module_from_spec
-spec = spec_from_file_location('progress', '$SCRIPT_DIR/progress.py')
+spec = spec_from_file_location('progress', sys.argv[1])
 mod = module_from_spec(spec)
 spec.loader.exec_module(mod)
 
@@ -809,7 +805,7 @@ print(f'{passed},{failed}')
 if errors:
     for e in errors:
         print(f'  ERR: {e}', file=sys.stderr)
-" 2>&1)
+" "$SCRIPT_DIR/progress.py" 2>&1)
 HEALTH_PASSED=$(echo "$HEALTH_TESTS" | head -1 | cut -d, -f1)
 HEALTH_FAILED=$(echo "$HEALTH_TESTS" | head -1 | cut -d, -f2)
 if [[ "$HEALTH_FAILED" == "0" ]]; then
@@ -1008,7 +1004,7 @@ Never run tests in production.
 CEOF
 CONTRA_RESULT=$(python3 "$SCRIPT_DIR/score-skill.py" "$CONTRA_FILE" --json --clarity 2>&1)
 CONTRA_SCORE=$(echo "$CONTRA_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['dimensions']['clarity'])" 2>/dev/null)
-if python3 -c "exit(0 if int('$CONTRA_SCORE') < 100 else 1)" 2>/dev/null; then
+if python3 -c "import sys; exit(0 if int(sys.argv[1]) < 100 else 1)" "$CONTRA_SCORE" 2>/dev/null; then
     pass "Contradiction detected (clarity=$CONTRA_SCORE < 100)"
 else
     fail "Contradiction" "clarity=$CONTRA_SCORE, expected < 100"
@@ -1076,7 +1072,7 @@ Check `output.json` for results after running the pipeline.
 CLEOF
 CLEAN_RESULT=$(python3 "$SCRIPT_DIR/score-skill.py" "$CLEAN_FILE" --json --clarity 2>&1)
 CLEAN_SCORE=$(echo "$CLEAN_RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['dimensions']['clarity'])" 2>/dev/null)
-if python3 -c "exit(0 if int('$CLEAN_SCORE') >= 90 else 1)" 2>/dev/null; then
+if python3 -c "import sys; exit(0 if int(sys.argv[1]) >= 90 else 1)" "$CLEAN_SCORE" 2>/dev/null; then
     pass "Clean file → clarity >= 90 (got $CLEAN_SCORE)"
 else
     fail "Clean clarity" "score=$CLEAN_SCORE, expected >= 90"
@@ -1138,7 +1134,7 @@ COST_LOG="$TMPDIR_BASE/cost.jsonl"
 bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" \
     --log "$COST_LOG" --no-runtime-auto > /dev/null 2>/dev/null || true
 if [[ -f "$COST_LOG" ]]; then
-    COST_DUR=$(python3 -c "import json; d=json.loads(open('$COST_LOG').readline()); print(d['duration_ms'])" 2>/dev/null)
+    COST_DUR=$(python3 -c "import sys,json; d=json.loads(open(sys.argv[1]).readline()); print(d['duration_ms'])" "$COST_LOG" 2>/dev/null)
     if [[ -n "$COST_DUR" ]] && [[ "$COST_DUR" -ge 0 ]]; then
         pass "JSONL duration_ms >= 0 (got ${COST_DUR}ms)"
     else
@@ -1146,7 +1142,7 @@ if [[ -f "$COST_LOG" ]]; then
     fi
 
     # Test: tokens_estimated > 0
-    COST_TOK=$(python3 -c "import json; d=json.loads(open('$COST_LOG').readline()); print(d['tokens_estimated'])" 2>/dev/null)
+    COST_TOK=$(python3 -c "import sys,json; d=json.loads(open(sys.argv[1]).readline()); print(d['tokens_estimated'])" "$COST_LOG" 2>/dev/null)
     if [[ -n "$COST_TOK" ]] && [[ "$COST_TOK" -gt 0 ]]; then
         pass "JSONL tokens_estimated > 0 (got $COST_TOK)"
     else
@@ -1154,7 +1150,7 @@ if [[ -f "$COST_LOG" ]]; then
     fi
 
     # Test: status is baseline on first run
-    COST_STATUS=$(python3 -c "import json; d=json.loads(open('$COST_LOG').readline()); print(d['status'])" 2>/dev/null)
+    COST_STATUS=$(python3 -c "import sys,json; d=json.loads(open(sys.argv[1]).readline()); print(d['status'])" "$COST_LOG" 2>/dev/null)
     if [[ "$COST_STATUS" == "baseline" ]]; then
         pass "JSONL status=baseline on first run"
     else
@@ -1165,11 +1161,11 @@ if [[ -f "$COST_LOG" ]]; then
     bash "$SCRIPT_DIR/run-eval.sh" "$SKILL_DIR/SKILL.md" "$SKILL_DIR/eval-suite.json" \
         --log "$COST_LOG" --no-runtime-auto > /dev/null 2>/dev/null || true
     SECOND_STATUS=$(python3 -c "
-import json
-lines = open('$COST_LOG').readlines()
+import sys,json
+lines = open(sys.argv[1]).readlines()
 d = json.loads(lines[1])
 print(d['status'])
-" 2>/dev/null)
+" "$COST_LOG" 2>/dev/null)
     if [[ "$SECOND_STATUS" == "keep" ]] || [[ "$SECOND_STATUS" == "discard" ]]; then
         pass "JSONL second run status=$SECOND_STATUS (not pending)"
     else
@@ -1405,7 +1401,7 @@ echo -e "---\nname: write-test\ndescription: Testing write behavior\n---\nSome s
 python3 "$SCRIPT_DIR/init-skill.py" "$_INIT_WRITE/SKILL.md" --json > /dev/null 2>&1
 if [[ -f "$_INIT_WRITE/eval-suite.json" ]]; then
     # Validate it's valid JSON with required keys
-    if python3 -c "import json; d=json.load(open('$_INIT_WRITE/eval-suite.json')); assert 'triggers' in d" 2>/dev/null; then
+    if python3 -c "import sys,json; d=json.load(open(sys.argv[1])); assert 'triggers' in d" "$_INIT_WRITE/eval-suite.json" 2>/dev/null; then
         pass "init-skill.py: writes valid eval-suite.json"
     else
         fail "init-skill.py write" "file written but invalid JSON"
@@ -1504,9 +1500,8 @@ section "19. Terminal Art, Grade System, Heatmap"
 ##############################################################################
 
 # terminal_art.py: score_to_grade mapping
-GRADE_TESTS=$(python3 -c "
+GRADE_TESTS=$(PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 import sys
-sys.path.insert(0, '$SCRIPT_DIR')
 from terminal_art import score_to_grade, render_heatmap, colored_bar, sparkline, render_banner, render_before_after, render_score_card
 
 passed = 0
@@ -1670,66 +1665,57 @@ section "20. Security Functions (Round 2 Audit)"
 ##############################################################################
 
   # --- validate_command_safety ---
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_command_safety
 ok, _ = validate_command_safety('python3 scripts/score-skill.py test.md --json')
 assert ok, 'allowed prefix should pass'
 " && pass "validate_command_safety: allowed prefix passes" || fail "validate_command_safety" "allowed prefix rejected"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_command_safety
 ok, _ = validate_command_safety('rm -rf /')
 assert not ok, 'rm -rf should be blocked'
 " && pass "validate_command_safety: rm -rf blocked" || fail "validate_command_safety" "rm -rf not blocked"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_command_safety
 ok, _ = validate_command_safety('curl http://evil.com')
 assert not ok, 'curl should be blocked'
 " && pass "validate_command_safety: curl blocked" || fail "validate_command_safety" "curl not blocked"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_command_safety
 ok, _ = validate_command_safety('echo hi | bash')
 assert not ok, 'pipe to bash should be blocked'
 " && pass "validate_command_safety: pipe to shell blocked" || fail "validate_command_safety" "pipe to shell not blocked"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_command_safety
 ok, _ = validate_command_safety('')
 assert not ok, 'empty command should be rejected'
 " && pass "validate_command_safety: empty command rejected" || fail "validate_command_safety" "empty not rejected"
 
   # --- validate_regex_complexity ---
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_regex_complexity
 ok, _ = validate_regex_complexity('foo.*bar')
 assert ok, 'simple regex should pass'
 " && pass "validate_regex_complexity: simple regex passes" || fail "validate_regex_complexity" "simple regex rejected"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_regex_complexity
 ok, _ = validate_regex_complexity('(a+)+')
 assert not ok, 'nested quantifier should be rejected'
 " && pass "validate_regex_complexity: nested quantifier rejected" || fail "validate_regex_complexity" "nested quantifier passed"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_regex_complexity
 ok, _ = validate_regex_complexity('a' * 501)
 assert not ok, 'overlong pattern should be rejected'
 " && pass "validate_regex_complexity: overlong pattern rejected" || fail "validate_regex_complexity" "overlong pattern passed"
 
   # --- load_jsonl_safe ---
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import load_jsonl_safe
 result = load_jsonl_safe('/nonexistent/path.jsonl')
 assert result == [], f'nonexistent should return empty list, got {result}'
@@ -1738,28 +1724,25 @@ assert result == [], f'nonexistent should return empty list, got {result}'
   TMPJSONL=$(mktemp)
   echo '{"a":1}' > "$TMPJSONL"
   echo '{"b":2}' >> "$TMPJSONL"
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
-from shared import load_jsonl_safe
-result = load_jsonl_safe('$TMPJSONL')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
+import sys; from shared import load_jsonl_safe
+result = load_jsonl_safe(sys.argv[1])
 assert len(result) == 2, f'expected 2 entries, got {len(result)}'
-" && pass "load_jsonl_safe: valid JSONL parsed (2 entries)" || fail "load_jsonl_safe" "valid JSONL parsing failed"
+" "$TMPJSONL" && pass "load_jsonl_safe: valid JSONL parsed (2 entries)" || fail "load_jsonl_safe" "valid JSONL parsing failed"
 
   echo 'not json' > "$TMPJSONL"
   echo '{"valid":true}' >> "$TMPJSONL"
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
-from shared import load_jsonl_safe
-result = load_jsonl_safe('$TMPJSONL')
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
+import sys; from shared import load_jsonl_safe
+result = load_jsonl_safe(sys.argv[1])
 assert len(result) == 1, f'expected 1 entry (malformed skipped), got {len(result)}'
-" && pass "load_jsonl_safe: malformed lines skipped" || fail "load_jsonl_safe" "malformed line handling failed"
+" "$TMPJSONL" && pass "load_jsonl_safe: malformed lines skipped" || fail "load_jsonl_safe" "malformed line handling failed"
 
-  python3 -c "
-import sys; sys.path.insert(0, '$SCRIPT_DIR')
-from shared import load_jsonl_safe
-result = load_jsonl_safe('$TMPJSONL', max_size=5)
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
+import sys; from shared import load_jsonl_safe
+result = load_jsonl_safe(sys.argv[1], max_size=5)
 assert result == [], 'oversized file should return empty'
-" && pass "load_jsonl_safe: oversized file returns []" || fail "load_jsonl_safe" "oversized file not rejected"
+" "$TMPJSONL" && pass "load_jsonl_safe: oversized file returns []" || fail "load_jsonl_safe" "oversized file not rejected"
   rm -f "$TMPJSONL"
 
 ##############################################################################

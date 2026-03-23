@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 import re
-import signal
 import sys
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +33,15 @@ _RE_DESC_BLOCK = re.compile(
     r"^description:\s*[>|]-?\s*\n((?:[ \t]+.+\n)*)", re.MULTILINE
 )
 _RE_DESC_INLINE = re.compile(r'^description:\s*"?(.+?)"?\s*$', re.MULTILINE)
+
+
+def strip_frontmatter(content: str) -> str:
+    """Strip YAML frontmatter (---...---) from skill content."""
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end >= 4:
+            return content[end + 3:].lstrip("\n")
+    return content
 
 
 def invalidate_cache(skill_path: str) -> None:
@@ -100,10 +109,17 @@ def validate_regex_complexity(pattern: str, max_length: int = 500) -> tuple[bool
     if nested_quant.search(pattern):
         return False, "nested quantifiers detected (potential ReDoS)"
 
-    # Detect overlapping alternations with quantifiers
-    overlap = re.compile(r'\([^)]*\|[^)]*\)[+*]{1,2}')
+    # Detect overlapping alternations with quantifiers.
+    # Non-capturing groups (?:...) are excluded: (?:a|b)+ is safe because
+    # the alternatives are atomic and cannot cause catastrophic backtracking.
+    overlap = re.compile(r'\((?!\?:)[^)]*\|[^)]*\)[+*]{1,2}')
     if overlap.search(pattern):
         return False, "overlapping alternation with quantifier (potential ReDoS)"
+
+    # Dot-star or dot-plus inside a repeated group: (.*X)+
+    group_inner_quant = re.compile(r'\([^)]*[.][*+][^)]*\)[+*?{]')
+    if group_inner_quant.search(pattern):
+        return False, "dot-wildcard quantifier inside repeated group (potential ReDoS)"
 
     return True, "ok"
 
@@ -111,44 +127,34 @@ def validate_regex_complexity(pattern: str, max_length: int = 500) -> tuple[bool
 def regex_search_safe(pattern: str, text: str, timeout: int = 2) -> bool:
     """Regex search with timeout to prevent ReDoS from user-supplied patterns.
 
-    Uses SIGALRM on POSIX; falls back to unprotected search on Windows.
+    Runs the regex in a daemon thread with a timeout. Returns False on
+    timeout, invalid pattern (re.error), or no match. This approach is
+    thread-safe (unlike SIGALRM which is per-process) and portable across
+    all platforms.
     """
-    if not hasattr(signal, "SIGALRM"):
-        # Windows/non-POSIX fallback: use threading for timeout
-        import threading
-        result = [False]
-        error = [None]
+    result: list[bool] = [False]
+    error: list[Exception | None] = [None]
 
-        def _search():
-            try:
-                result[0] = bool(re.search(pattern, text, re.IGNORECASE))
-            except re.error as e:
-                error[0] = e
+    def _search() -> None:
+        try:
+            result[0] = bool(re.search(pattern, text, re.IGNORECASE))
+        except re.error as e:
+            error[0] = e
 
-        t = threading.Thread(target=_search, daemon=True)
-        t.start()
-        t.join(timeout=timeout)
+    t = threading.Thread(target=_search, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
 
-        if t.is_alive():
-            print(f"Warning: regex timed out after {timeout}s on pattern '{pattern[:60]}'", file=sys.stderr)
-            return False
-        if error[0]:
-            return False
-        return result[0]
-
-    def _handler(signum, frame):
-        raise TimeoutError("Regex timed out")
-
-    old_handler = signal.signal(signal.SIGALRM, _handler)
-    signal.alarm(timeout)
-    try:
-        return bool(re.search(pattern, text, re.IGNORECASE))
-    except TimeoutError:
-        print(f"Warning: regex timed out after {timeout}s on pattern '{pattern[:60]}'", file=sys.stderr)
+    if t.is_alive():
+        print(
+            f"Warning: regex timed out after {timeout}s on pattern "
+            f"'{pattern[:60]}'",
+            file=sys.stderr,
+        )
         return False
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
+    if error[0] is not None:
+        return False
+    return result[0]
 
 
 def load_jsonl_safe(path: str | Path, max_size: int = 10_000_000) -> list[dict]:

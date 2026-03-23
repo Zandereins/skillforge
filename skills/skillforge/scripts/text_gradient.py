@@ -22,7 +22,7 @@ from typing import Any, Optional
 SCRIPT_DIR = Path(__file__).parent
 
 import score_skill as scorer
-from shared import read_skill_safe, extract_description
+from shared import read_skill_safe, extract_description, strip_frontmatter
 from nlp import tokenize_meaningful
 
 
@@ -670,11 +670,7 @@ def generate_patches(skill_path: str, gradients: list[dict]) -> list[dict]:
     skill_name = name_match.group(1).strip() if name_match else Path(skill_path).parent.name
 
     # Extract body text (after frontmatter) for context-aware patch generation
-    body_text = content
-    if content.startswith("---"):
-        fm_end = content.find("---", 3)
-        if fm_end >= 0:
-            body_text = content[fm_end + 3:].strip()
+    body_text = strip_frontmatter(content)
 
     # Extract meaningful terms from body for auto-generated descriptions
     body_terms = tokenize_meaningful(body_text.lower())[:5] if body_text else []

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 """SkillForge Meta-Learning Report — Data-Informed Insights
 
 Reads collected meta-learning data (calibration, strategy, trigger logs)
@@ -11,6 +10,7 @@ Usage:
 
 Default meta dir: ~/.skillforge/meta/
 """
+from __future__ import annotations
 
 import argparse
 import json

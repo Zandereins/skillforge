@@ -8,7 +8,7 @@ Sub-checks (100 pts total):
 - Ambiguous pronoun detection (20 pts): sentences starting with It/This/That
 - Instruction completeness (25 pts): every "Run X" has a concrete command
 """
-from shared import read_skill_safe
+from shared import read_skill_safe, strip_frontmatter
 from scoring.patterns import (
     _RE_ALWAYS_PATTERNS, _RE_NEVER_PATTERNS, _RE_VAGUE_REF,
     _RE_BACKTICK_REF, _RE_SPECIFIC_REF, _RE_AMBIGUOUS_PRONOUN,
@@ -34,11 +34,7 @@ def score_clarity(skill_path: str) -> dict:
         return {"score": 0, "issues": ["file_not_found"], "details": {}}
 
     # Strip frontmatter
-    body = content
-    if content.startswith("---"):
-        end = content.find("---", 3)
-        if end > 0:
-            body = content[end + 3:]
+    body = strip_frontmatter(content)
 
     # Strip code blocks before clarity analysis (avoid false positives
     # from "always"/"never" inside code examples)

@@ -40,7 +40,7 @@ echo "--- Step 1: Score deliberately bad skill ---"
 RESULT1=$(python3 "$SCORER" "$TMPDIR/SKILL.md" --eval-suite "$TMPDIR/eval-suite.json" --json 2>&1)
 SCORE1=$(echo "$RESULT1" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
 
-if [[ -n "$SCORE1" ]] && python3 -c "exit(0 if float('$SCORE1') < 50 else 1)" 2>/dev/null; then
+if [[ -n "$SCORE1" ]] && python3 -c "import sys; exit(0 if float(sys.argv[1]) < 50 else 1)" "$SCORE1" 2>/dev/null; then
     pass "Bad skill scores low (composite=$SCORE1 < 50)"
 else
     fail "Bad skill score" "expected < 50, got $SCORE1"
@@ -87,7 +87,7 @@ IMPROVED1
 RESULT2=$(python3 "$SCORER" "$TMPDIR/SKILL.md" --eval-suite "$TMPDIR/eval-suite.json" --json 2>&1)
 SCORE2=$(echo "$RESULT2" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
 
-if python3 -c "exit(0 if float('$SCORE2') > float('$SCORE1') else 1)" 2>/dev/null; then
+if python3 -c "import sys; exit(0 if float(sys.argv[1]) > float(sys.argv[2]) else 1)" "$SCORE2" "$SCORE1" 2>/dev/null; then
     pass "Frontmatter improves score ($SCORE1 → $SCORE2)"
 else
     fail "Frontmatter improvement" "expected > $SCORE1, got $SCORE2"
@@ -132,7 +132,7 @@ IMPROVED2
 RESULT3=$(python3 "$SCORER" "$TMPDIR/SKILL.md" --eval-suite "$TMPDIR/eval-suite.json" --json 2>&1)
 SCORE3=$(echo "$RESULT3" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
 
-if python3 -c "exit(0 if float('$SCORE3') > float('$SCORE2') else 1)" 2>/dev/null; then
+if python3 -c "import sys; exit(0 if float(sys.argv[1]) > float(sys.argv[2]) else 1)" "$SCORE3" "$SCORE2" 2>/dev/null; then
     pass "Headers + examples improve score ($SCORE2 → $SCORE3)"
 else
     fail "Headers + examples" "expected > $SCORE2, got $SCORE3"
@@ -186,7 +186,7 @@ IMPROVED3
 RESULT4=$(python3 "$SCORER" "$TMPDIR/SKILL.md" --eval-suite "$TMPDIR/eval-suite.json" --json 2>&1)
 SCORE4=$(echo "$RESULT4" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])" 2>/dev/null)
 
-if python3 -c "exit(0 if float('$SCORE4') > float('$SCORE3') else 1)" 2>/dev/null; then
+if python3 -c "import sys; exit(0 if float(sys.argv[1]) > float(sys.argv[2]) else 1)" "$SCORE4" "$SCORE3" 2>/dev/null; then
     pass "Scope + cleanup improves score ($SCORE3 → $SCORE4)"
 else
     fail "Scope + cleanup" "expected > $SCORE3, got $SCORE4"
@@ -195,8 +195,8 @@ fi
 # --- Step 5: Verify total improvement is substantial ---
 echo ""
 echo "--- Step 5: Verify total improvement ---"
-TOTAL_DELTA=$(python3 -c "print(round(float('$SCORE4') - float('$SCORE1'), 1))" 2>/dev/null)
-if python3 -c "exit(0 if float('$TOTAL_DELTA') >= 15 else 1)" 2>/dev/null; then
+TOTAL_DELTA=$(python3 -c "import sys; print(round(float(sys.argv[1]) - float(sys.argv[2]), 1))" "$SCORE4" "$SCORE1" 2>/dev/null)
+if python3 -c "import sys; exit(0 if float(sys.argv[1]) >= 15 else 1)" "$TOTAL_DELTA" 2>/dev/null; then
     pass "Total improvement >= 15 points ($SCORE1 → $SCORE4, delta=$TOTAL_DELTA)"
 else
     fail "Total improvement" "expected >= 15 points, got delta=$TOTAL_DELTA ($SCORE1 → $SCORE4)"

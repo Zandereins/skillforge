@@ -71,7 +71,12 @@ def score_quality(skill_path: str, eval_suite: Optional[dict]) -> dict:
         issues.append("no_known_assertion_types")
 
     # 3. Test cases cover different skill features (25 pts)
-    feature_keywords = {"analyze", "improve", "report"}
+    feature_keywords = {
+        "analyze", "improve", "report", "validate", "generate",
+        "format", "compare", "summarize", "create", "check",
+        "review", "test", "build", "deploy", "fix", "debug",
+        "search", "parse", "transform", "optimize",
+    }
     covered_features = set()
     for tc in test_cases:
         prompt = tc.get("prompt", "").lower()

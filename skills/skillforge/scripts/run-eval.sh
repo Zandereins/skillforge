@@ -17,6 +17,9 @@ set -euo pipefail
 # --- Cost tracking: capture start time ---
 START_SECONDS=$SECONDS
 
+# --- Temp directory for all mktemp files (cleaned up in trap) ---
+TMPDIR_BASE=$(mktemp -d)
+
 # --- Default config ---
 TIMEOUT=300
 RESULTS_LOG=""
@@ -45,6 +48,8 @@ cleanup() {
     if [[ -n "${TEST_PID:-}" ]] && kill -0 "$TEST_PID" 2>/dev/null; then
         kill -9 "$TEST_PID" 2>/dev/null || true
     fi
+    # Remove all temp files created during this run
+    rm -rf "${TMPDIR_BASE:-/nonexistent}" 2>/dev/null || true
     exit "$exit_code"
 }
 trap cleanup EXIT INT TERM
@@ -165,7 +170,7 @@ COMPOSITE_SCORE=0
 SCORER_FAILED=0
 
 echo "  Running Python scorer..." >&2
-SCORE_OUTPUT=$(mktemp)
+SCORE_OUTPUT=$(mktemp "$TMPDIR_BASE/score.XXXXXX")
 # Use timeout if available (Linux), fall back to direct invocation (macOS)
 TIMEOUT_CMD=""
 if command -v timeout &>/dev/null; then
@@ -197,19 +202,19 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
     # Read skill content once (not per-assertion)
     SKILL_CONTENT=$(cat "$SKILL_MD" 2>/dev/null || echo "")
 
-    BINARY_OUTPUT=$(mktemp)
+    BINARY_OUTPUT=$(mktemp "$TMPDIR_BASE/binary.XXXXXX")
     {
         ASSERTIONS_PASSED=0
         ASSERTIONS_TOTAL=0
 
         # Extract all assertions in one jq call as NUL-separated blocks
         # Each block: tc_id\ntype\nvalue\ndescription\n\0
-        ASSERTIONS_FILE=$(mktemp)
+        ASSERTIONS_FILE=$(mktemp "$TMPDIR_BASE/assertions.XXXXXX")
         jq -rj '.test_cases[]? | .id as $tc_id | (.assertions // [])[] |
             "\($tc_id)\n\(.type)\n\(.value)\n\(.description)\n\u0000"' "$EVAL_SUITE" > "$ASSERTIONS_FILE"
 
         # Collect results as JSONL lines (one per assertion), build array at end
-        RESULTS_LINES=$(mktemp)
+        RESULTS_LINES=$(mktemp "$TMPDIR_BASE/results.XXXXXX")
 
         # Pre-resolve timeout command (once, not per-assertion)
         _GREP_TIMEOUT=""
@@ -247,9 +252,9 @@ if jq -e '.test_cases' "$EVAL_SUITE" > /dev/null 2>&1; then
                     ;;
                 pattern)
                     # Validate regex complexity before execution (ReDoS prevention)
-                    if ! python3 -c "
-import sys; sys.path.insert(0,'$SCRIPT_DIR')
+                    if ! PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}" python3 -c "
 from shared import validate_regex_complexity
+import sys
 ok, reason = validate_regex_complexity(sys.argv[1])
 if not ok: sys.exit(1)
 " "$assertion_value" 2>/dev/null; then
@@ -308,7 +313,7 @@ fi
 RUNTIME_RESULTS="{}"
 if [[ $RUNTIME_EVAL -eq 1 ]]; then
     echo "  Running runtime evaluator..." >&2
-    RUNTIME_OUTPUT=$(mktemp)
+    RUNTIME_OUTPUT=$(mktemp "$TMPDIR_BASE/runtime.XXXXXX")
     if python3 "$SCRIPT_DIR/runtime-evaluator.py" "$EVAL_SUITE" \
         --skill-path "$SKILL_MD" --timeout "$TIMEOUT" --json > "$RUNTIME_OUTPUT" 2>/dev/null; then
         RUNTIME_RESULTS=$(cat "$RUNTIME_OUTPUT")

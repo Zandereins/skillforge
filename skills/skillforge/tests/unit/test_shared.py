@@ -12,6 +12,8 @@ from shared import (
     validate_regex_complexity,
     validate_command_safety,
     invalidate_cache,
+    strip_frontmatter,
+    regex_search_safe,
     MAX_SKILL_SIZE,
 )
 
@@ -104,6 +106,34 @@ class TestValidateRegexComplexity:
     def test_normal_length_passes(self):
         assert validate_regex_complexity("a" * 499)[0] is True
 
+    def test_dot_star_in_repeated_group_rejected(self):
+        # (.*a)+ — dot-star inside a group that is itself quantified: ReDoS risk
+        ok, reason = validate_regex_complexity("(.*a)+")
+        assert ok is False
+        assert reason != "ok"
+
+    def test_nested_whitespace_quantifiers_rejected(self):
+        # (\s+)+ — nested quantifiers, classic catastrophic backtracking
+        ok, reason = validate_regex_complexity(r"(\s+)+")
+        assert ok is False
+        assert reason != "ok"
+
+    def test_non_capturing_alternation_allowed(self):
+        # (?:a|b)+ — non-capturing group with alternation but no inner quantifier
+        # Should be safe: the alternatives are atomic (no inner quantifier)
+        ok, _reason = validate_regex_complexity("(?:a|b)+")
+        assert ok is True
+
+    def test_simple_character_class_quantifier_allowed(self):
+        # [a-z]+ — character class with quantifier, no nested quantifiers
+        ok, _reason = validate_regex_complexity("[a-z]+")
+        assert ok is True
+
+    def test_quantifier_inside_non_repeated_group_allowed(self):
+        # (a+) — quantifier inside a group, but the group itself is not repeated
+        ok, _reason = validate_regex_complexity("(a+)")
+        assert ok is True
+
 
 class TestValidateCommandSafety:
     def test_allowed_prefix(self):
@@ -129,3 +159,87 @@ class TestValidateCommandSafety:
 
     def test_git_allowed(self):
         assert validate_command_safety("git diff HEAD")[0] is True
+
+
+class TestStripFrontmatter:
+    def test_valid_frontmatter_returns_body(self):
+        content = "---\nname: test\n---\n\n# Body\n\nContent here."
+        result = strip_frontmatter(content)
+        assert result == "# Body\n\nContent here."
+        assert "name: test" not in result
+
+    def test_no_frontmatter_returned_unchanged(self):
+        content = "# Just a heading\n\nNo frontmatter here."
+        result = strip_frontmatter(content)
+        assert result == content
+
+    def test_only_opening_fence_returned_unchanged(self):
+        # Only one --- at the start, no closing ---
+        content = "---\nname: broken\nno closing fence\n"
+        result = strip_frontmatter(content)
+        assert result == content
+
+    def test_empty_string_returned_unchanged(self):
+        result = strip_frontmatter("")
+        assert result == ""
+
+    def test_frontmatter_no_newline_after_closing(self):
+        # Closing --- immediately followed by body text (no newline)
+        content = "---\nname: test\n---body starts here"
+        result = strip_frontmatter(content)
+        # Should strip frontmatter and return the remaining text
+        assert "name: test" not in result
+        assert "body starts here" in result
+
+    def test_body_leading_newlines_stripped(self):
+        content = "---\nname: test\n---\n\n\nActual body."
+        result = strip_frontmatter(content)
+        # lstrip("\n") should remove leading newlines
+        assert result.startswith("Actual body.")
+
+    def test_six_dashes_returned_unchanged(self):
+        # "------" starts with "---" but content.find("---", 3) returns 3,
+        # which is < 4, so the whole string must be returned unchanged.
+        content = "------"
+        result = strip_frontmatter(content)
+        assert result == content
+
+    def test_empty_frontmatter_returns_empty_body(self):
+        # "---\n---" has opening fence at 0 and closing fence at 4.
+        # end == 4 >= 4, so content[4+3:] == "" stripped of leading newlines == "".
+        content = "---\n---"
+        result = strip_frontmatter(content)
+        assert result == ""
+
+
+class TestRegexSearchSafe:
+    def test_valid_pattern_with_match_returns_true(self):
+        assert regex_search_safe(r"hello", "say hello world") is True
+
+    def test_valid_pattern_without_match_returns_false(self):
+        assert regex_search_safe(r"goodbye", "say hello world") is False
+
+    def test_invalid_regex_threading_path_returns_false(self, monkeypatch):
+        # The threading (non-SIGALRM) path correctly catches re.error and returns False.
+        # Force it by monkeypatching signal so hasattr(signal, "SIGALRM") returns False.
+        import signal as _signal
+        original = getattr(_signal, "SIGALRM", None)
+        if original is not None:
+            monkeypatch.delattr(_signal, "SIGALRM")
+        import importlib
+        import shared as _shared
+        importlib.reload(_shared)
+        from shared import regex_search_safe as rss_patched
+        result = rss_patched(r"[invalid", "some text")
+        assert result is False
+
+    def test_case_insensitive_match(self):
+        # regex_search_safe uses re.IGNORECASE
+        assert regex_search_safe(r"HELLO", "say hello world") is True
+
+    def test_empty_pattern_matches_anything(self):
+        # Empty pattern always matches in Python re
+        assert regex_search_safe(r"", "any text") is True
+
+    def test_empty_text_no_match(self):
+        assert regex_search_safe(r"something", "") is False

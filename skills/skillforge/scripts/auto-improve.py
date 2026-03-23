@@ -40,6 +40,7 @@ from terminal_art import score_to_grade, grade_colored, progress_bar, sparkline
 # Use underscore aliases for clean imports (wrapper modules for hyphenated originals)
 import score_skill as scorer
 import text_gradient as gradient_mod
+from shared import load_eval_suite
 
 # Optional imports — use underscore aliases where available
 _MISSING_MODULES: list[tuple[str, str]] = []
@@ -167,18 +168,6 @@ def _score_skill(skill_path: str, eval_suite: Optional[dict] = None) -> dict:
     }
 
 
-def _load_eval_suite(skill_path: str) -> Optional[dict]:
-    """Auto-discover eval-suite.json."""
-    skill_dir = Path(skill_path).parent
-    auto_path = skill_dir / "eval-suite.json"
-    if auto_path.exists():
-        try:
-            return json.loads(auto_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            pass
-    return None
-
-
 # --- ROI Stopping ---
 
 def _has_dimension_regression(
@@ -248,20 +237,20 @@ def _should_stop(state: list[dict], current_score: dict) -> tuple[bool, str]:
     if measurable and all(v >= 90 for v in measurable.values()):
         return True, f"all dimensions >= 90"
 
-    # EMA-based plateau detection: EMA ROI < 0.1 for the last 5 positions
+    # EMA-based plateau detection: EMA ROI < 0.1 for 5 consecutive steps
     qualifying = [e for e in state if e.get("status") in ("keep", "discard")]
     if len(qualifying) >= 7:
-        # Check EMA at each of the last 5 positions (requires >=3 entries per slice)
-        all_low = True
-        for offset in range(5):
-            end_idx = len(qualifying) - offset  # includes final entry when offset=0
-            ema = _compute_ema_roi(qualifying[:end_idx])
-            if ema >= 0.1:
-                all_low = False
-                break
-        if all_low:
-            final_ema = _compute_ema_roi(qualifying)
-            return True, f"EMA ROI plateau (ema={final_ema:.3f} < 0.1 for last 5 entries)"
+        # Replay the EMA step-by-step (same alpha and formula as _compute_ema_roi)
+        # and inspect the actual EMA value at each of the last 5 steps.
+        alpha = 0.3
+        ema_val = 0.0
+        ema_values: list[float] = []
+        for entry in qualifying:
+            delta = abs(entry.get("delta", 0.0))
+            ema_val = alpha * delta + (1 - alpha) * ema_val
+            ema_values.append(ema_val)
+        if len(ema_values) >= 5 and all(v < 0.1 for v in ema_values[-5:]):
+            return True, f"EMA ROI plateau: last 5 EMA values all < 0.1 ({ema_values[-5:]!r})"
 
     return False, ""
 
@@ -311,7 +300,7 @@ def run_auto_improve(
         Summary dict with iterations, final score, improvements
     """
     skill_path = str(Path(skill_path).resolve())
-    eval_suite = _load_eval_suite(skill_path)
+    eval_suite = load_eval_suite(skill_path)
 
     # Load existing state for resume
     state = _load_state(skill_path)
@@ -430,10 +419,7 @@ def run_auto_improve(
                 Path(skill_path).write_text(backup_content, encoding="utf-8")
                 scorer.invalidate_cache(skill_path)
 
-            if dry_run:
-                result = gradient_mod.apply_patches(skill_path, [patch_candidate], dry_run=True)
-            else:
-                result = gradient_mod.apply_patches(skill_path, [patch_candidate], dry_run=False)
+            result = gradient_mod.apply_patches(skill_path, [patch_candidate], dry_run=dry_run)
 
             if result["errors"]:
                 patch_errors.append((patch_candidate, result["errors"]))
@@ -474,13 +460,14 @@ def run_auto_improve(
             if not dry_run and content_after is not None:
                 Path(skill_path).write_text(content_after, encoding="utf-8")
                 scorer.invalidate_cache(skill_path)
+            old_composite = current_score["composite"]
             current_score = new_score
             if delta > 0:
                 improvements += 1
             total_delta += delta
             top_patch = chosen_patch
             if verbose:
-                rel_roi = _compute_relative_roi(delta, current_score["composite"])
+                rel_roi = _compute_relative_roi(delta, old_composite)
                 print(f"✓ Keep (composite: {new_score['composite']}, rel_roi: {rel_roi:.3f})", file=sys.stderr)
         else:
             status = "discard"

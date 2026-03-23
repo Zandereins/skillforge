@@ -9,7 +9,3 @@ from scoring import (
     score_diff, explain_score_change, compute_composite,
 )
 from shared import invalidate_cache, read_skill_safe, extract_description
-
-# Backward compat aliases
-_read_skill_safe = read_skill_safe
-_extract_description = extract_description

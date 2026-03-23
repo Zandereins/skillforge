@@ -20,7 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-from shared import read_skill_safe, extract_description, VALID_DIMENSIONS, invalidate_cache as _shared_invalidate_cache
+from shared import VALID_DIMENSIONS, invalidate_cache as _shared_invalidate_cache
 from scoring import (
     score_structure, score_triggers, score_efficiency,
     score_composability, score_coherence, score_quality,
@@ -169,9 +169,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# Backward compatibility for external importers
-from scoring.diff import explain_score_change
-from shared import extract_description as _extract_description
-_read_skill_safe = read_skill_safe

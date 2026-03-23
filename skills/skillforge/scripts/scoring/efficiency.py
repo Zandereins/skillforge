@@ -3,7 +3,7 @@
 Measures how much useful, actionable content the skill delivers
 relative to its total size. Penalizes bloat, rewards conciseness.
 """
-from shared import read_skill_safe
+from shared import read_skill_safe, strip_frontmatter
 from scoring.patterns import (
     _RE_ACTIONABLE_LINES, _RE_REAL_EXAMPLES, _RE_WHY_COUNT,
     _RE_VERIFICATION_CMDS, _RE_HEDGING, _RE_FILLER_PHRASES,
@@ -29,10 +29,7 @@ def score_efficiency(skill_path: str) -> dict:
     full_content = content
 
     # Strip frontmatter for body analysis
-    if content.startswith("---"):
-        end = content.find("---", 3)
-        if end > 0:
-            content = content[end + 3:]
+    content = strip_frontmatter(content)
 
     lines = content.strip().split("\n")
     total_lines = len(lines)

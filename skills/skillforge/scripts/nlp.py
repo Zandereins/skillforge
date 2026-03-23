@@ -29,8 +29,8 @@ def stem(word: str) -> str:
     for suffix, min_len in [
         ("ation", 6), ("ment", 5), ("ness", 5), ("tion", 5),
         ("sion", 5), ("able", 5), ("ible", 5), ("ying", 4),
-        ("ling", 4), ("ting", 4), ("ning", 4), ("ring", 4),
-        ("ing", 4), ("ied", 4), ("ies", 4), ("ous", 4),
+        ("ling", 4), ("ting", 4), ("ning", 4),
+        ("ing", 4), ("ring", 4), ("ied", 4), ("ies", 4), ("ous", 4),
         ("ive", 4), ("ize", 4), ("ise", 4), ("ate", 4),
         ("ful", 4), ("ely", 4), ("ally", 5), ("ly", 4),
         ("ed", 4), ("er", 4), ("es", 4), ("al", 4),
@@ -89,9 +89,3 @@ def tokenize_meaningful(text: str, expand_reverse: bool = False) -> list[str]:
                     result.append(syn)
                     seen.add(syn)
     return result
-
-
-def tokenize_simple(text: str) -> list[str]:
-    """Simple tokenizer (4+ chars, not stopwords, no stemming). For backward compat."""
-    words = RE_WORD_TOKEN.findall(text.lower())
-    return [w for w in words if w not in STOPWORDS]
