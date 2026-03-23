@@ -733,13 +733,9 @@ class ProgressAnalyzer:
         """
         try:
             # Import episodic store (sibling module)
-            import importlib.util
-            store_path = Path(__file__).parent / "episodic-store.py"
-            if not store_path.exists():
-                return 0
-            spec = importlib.util.spec_from_file_location("episodic_store", str(store_path))
-            store_mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(store_mod)
+            import importlib
+            sys.path.insert(0, str(Path(__file__).parent))
+            import episodic_store as store_mod
         except Exception:
             return 0
 

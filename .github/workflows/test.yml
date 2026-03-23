@@ -9,6 +9,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      test_passed: ${{ steps.integration.outputs.test_passed }}
+      test_total: ${{ steps.integration.outputs.test_total }}
+      composite_score: ${{ steps.scorer.outputs.composite_score }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,19 +25,30 @@ jobs:
         run: sudo apt-get install -y jq
 
       - name: Run integration tests
+        id: integration
         working-directory: skills/skillforge
-        run: bash scripts/test-integration.sh --no-runtime-auto
+        run: |
+          OUTPUT=$(bash scripts/test-integration.sh --no-runtime-auto 2>&1) || true
+          echo "$OUTPUT"
+          PASSED=$(echo "$OUTPUT" | grep -oP 'Results:\s*\K[0-9]+(?=\s*passed)' || echo "0")
+          FAILED=$(echo "$OUTPUT" | grep -oP 'Results:\s*[0-9]+\s*passed,\s*\K[0-9]+(?=\s*failed)' || echo "0")
+          TOTAL=$((PASSED + FAILED))
+          echo "test_passed=$PASSED" >> "$GITHUB_OUTPUT"
+          echo "test_total=$TOTAL" >> "$GITHUB_OUTPUT"
+          if [ "$FAILED" -gt 0 ]; then exit 1; fi
 
       - name: Run self-tests
         working-directory: skills/skillforge
         run: bash scripts/test-self.sh
 
       - name: Run scorer
+        id: scorer
         working-directory: skills/skillforge
         run: |
           RESULT=$(python3 scripts/score-skill.py SKILL.md --json 2>/dev/null)
           COMPOSITE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])")
           echo "Composite score: $COMPOSITE"
+          echo "composite_score=$COMPOSITE" >> "$GITHUB_OUTPUT"
           python3 -c "assert float('$COMPOSITE') >= 90, f'Score {$COMPOSITE} below threshold'"
 
       - name: Run eval suite
@@ -43,3 +58,40 @@ jobs:
       - name: Run proof test
         working-directory: skills/skillforge
         run: bash tests/proof/test-proof.sh
+
+  # Badge generation using dynamic badges
+  # Setup steps:
+  #   1. Create a public GitHub Gist (https://gist.github.com) — content doesn't matter
+  #   2. Copy the Gist ID from the URL (e.g., https://gist.github.com/user/<GIST_ID>)
+  #   3. Create a repository secret named GIST_TOKEN with a PAT that has gist scope
+  #   4. Replace <GIST_ID> below with your actual Gist ID
+  badges:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Tests badge
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: <GIST_ID>
+          filename: skillforge-tests.json
+          label: tests
+          message: "${{ needs.test.outputs.test_passed }}/${{ needs.test.outputs.test_total }} passed"
+          color: ${{ needs.test.outputs.test_passed == needs.test.outputs.test_total && 'brightgreen' || 'red' }}
+
+      - name: Score badge
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: <GIST_ID>
+          filename: skillforge-score.json
+          label: composite score
+          message: "${{ needs.test.outputs.composite_score }}"
+          color: >-
+            ${{
+              needs.test.outputs.composite_score >= 95 && 'brightgreen' ||
+              needs.test.outputs.composite_score >= 90 && 'green' ||
+              needs.test.outputs.composite_score >= 80 && 'yellow' ||
+              'red'
+            }}

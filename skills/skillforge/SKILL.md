@@ -126,9 +126,6 @@ See `references/metrics-catalog.md#custom` for setup and examples.
 | `/skillforge:eval` | Run eval suite, show results |
 | `/skillforge:report` | Generate improvement summary + diffs |
 | `/skillforge:mesh` | Scan all skills for trigger overlap, broken handoffs, scope collisions |
-| `/skillforge:mesh-evolve` | Mesh + generate fix actions (negative boundaries, stubs) (planned) |
-| `/skillforge:predict` | Predict best strategy before trying (from cross-session data) (planned) |
-| `/skillforge:recall` | Recall relevant past episodes from episodic memory (planned) |
 | `/skillforge:triage` | Cluster logged failures, auto-generate fixes |
 | `/skillforge:log-failure` | Manually log a skill failure for later triage |
 
@@ -266,6 +263,16 @@ Roll back to any version: `git log --oneline history/` shows the full lineage.
 
 Create new skills with `skill-creator`. For crashing skills, suggest using
 `systematic-debugging` first, then return to SkillForge for iteration.
+
+## Roadmap
+
+Planned subcommands (not yet implemented):
+
+| Command | Purpose |
+|---------|---------|
+| `/skillforge:mesh-evolve` | Mesh + generate fix actions (negative boundaries, stubs) |
+| `/skillforge:predict` | Predict best strategy before trying (from cross-session data) |
+| `/skillforge:recall` | Recall relevant past episodes from episodic memory |
 
 ## Files
 

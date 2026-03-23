@@ -1,16 +1,19 @@
-"""Underscore alias for score-skill.py — enables clean Python imports.
+"""score_skill — Python import facade for the scoring package.
 
-Usage:
-    import score_skill
-    score_skill.score_structure(path)
-    score_skill.compute_composite(scores)
+Enables `import score_skill` as before, backed by the scoring/ package.
 """
-import importlib
 import sys
 from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).parent))
-_mod = importlib.import_module("score-skill")
 
-def __getattr__(name):
-    return getattr(_mod, name)
+from scoring import (
+    score_structure, score_triggers, score_efficiency,
+    score_composability, score_coherence, score_quality,
+    score_edges, score_runtime, score_clarity,
+    score_diff, explain_score_change, compute_composite,
+)
+from shared import invalidate_cache, read_skill_safe, extract_description
+
+# Backward compat aliases
+_read_skill_safe = read_skill_safe
+_extract_description = extract_description
