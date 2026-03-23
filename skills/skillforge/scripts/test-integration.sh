@@ -1506,7 +1506,7 @@ failed = 0
 errors = []
 
 # Grade thresholds
-for score, expected in [(100,'S'),(95,'S'),(94.9,'A'),(85,'A'),(84,'B'),(75,'B'),(74,'C'),(65,'C'),(64,'D'),(50,'D'),(49,'D'),(35,'E'),(34,'F'),(0,'F')]:
+for score, expected in [(100,'S'),(95,'S'),(94.9,'A'),(85,'A'),(84,'B'),(75,'B'),(74,'C'),(65,'C'),(64,'D'),(50,'D'),(49,'E'),(35,'E'),(34,'F'),(0,'F')]:
     g = score_to_grade(score)
     if g == expected:
         passed += 1
