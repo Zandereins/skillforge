@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SkillForge — Auto-Improve Demo</title>
+<title>Schliff — Auto-Improve Demo</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -96,14 +96,14 @@
     <div class="dot dot-red"></div>
     <div class="dot dot-yellow"></div>
     <div class="dot dot-green"></div>
-    <span class="titlebar-text">skillforge — zsh — 800x500</span>
+    <span class="titlebar-text">schliff — zsh — 800x500</span>
   </div>
   <div class="terminal">
     <div id="output"></div>
   </div>
 </div>
 <script>
-// SkillForge Terminal Demo — self-contained, no external dependencies
+// Schliff Terminal Demo — self-contained, no external dependencies
 // All content is static/hardcoded. DOM manipulation uses only trusted static strings.
 (function() {
   var output = document.getElementById('output');
@@ -216,10 +216,10 @@
   // Define all scenes using safe part descriptors
   async function runScene1() {
     // Command
-    await typeCommand('$ ', '/skillforge:init demo/bad-skill/SKILL.md', 30, 70);
+    await typeCommand('$ ', '/schliff:init demo/bad-skill/SKILL.md', 30, 70);
     await sleep(600);
     pushEmpty();
-    pushLine([{cls:'brightgreen bold', text:'SkillForge Init: '}, {cls:'white', text:'deploy-helper'}]);
+    pushLine([{cls:'brightgreen bold', text:'Schliff Init: '}, {cls:'white', text:'deploy-helper'}]);
     await sleep(80);
     pushLine([{cls:'separator', text:'================================'}]);
     await sleep(80);
@@ -256,7 +256,7 @@
   async function runScene2() {
     await sleep(1500);
     pushEmpty();
-    await typeCommand('$ ', '/skillforge:auto', 30, 65);
+    await typeCommand('$ ', '/schliff:auto', 30, 65);
     await sleep(600);
     pushEmpty();
     await sleep(400);
@@ -314,7 +314,7 @@
   async function runScene3() {
     await sleep(800);
     pushEmpty();
-    pushLine([{cls:'brightgreen bold', text:'  SkillForge Auto-Improve Complete'}]);
+    pushLine([{cls:'brightgreen bold', text:'  Schliff Auto-Improve Complete'}]);
     await sleep(100);
     pushLine([{cls:'separator', text:'  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500'}]);
     await sleep(100);
@@ -349,10 +349,10 @@
   async function runScene4() {
     await sleep(800);
     pushEmpty();
-    pushLine([{cls:'grade-S', text:'  [\u2605 SkillForge: 99.9 [S]]'}]);
+    pushLine([{cls:'grade-S', text:'  [\u2605 Schliff: 99.9 [S]]'}]);
     await sleep(400);
     pushEmpty();
-    pushLine([{cls:'dim', text:'  \u2192 '}, {cls:'cyan', text:'github.com/Zandereins/skillforge'}]);
+    pushLine([{cls:'dim', text:'  \u2192 '}, {cls:'cyan', text:'github.com/Zandereins/schliff'}]);
     await sleep(3000);
   }
 

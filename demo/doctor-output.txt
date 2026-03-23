@@ -1,15 +1,15 @@
 ======================================================================
-  SkillForge Doctor — Skill Health Check
+  Schliff Doctor — Skill Health Check
 ======================================================================
 
   1 skills scanned | 1 healthy | 4 mesh issues
 
   Skill                      Score  Grade   Dims  Issues  Action
   --------------------------------------------------------------------
-  skillforge                  100    [S]    6/7       0  Healthy — consider runtime eval for
+  schliff                  100    [S]    6/7       0  Healthy — consider runtime eval for
 
   Mesh Health: 68/100 (4 cross-skill issues)
-  Run /skillforge:mesh for details.
+  Run /schliff:mesh for details.
 
   NOTE: Scores are STRUCTURAL — they measure file organization,
   not runtime effectiveness. Use --runtime for validated scoring.

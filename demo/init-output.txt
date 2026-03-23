@@ -1,5 +1,5 @@
 Computing baseline score...  done [0.1s]
-SkillForge Init: skillforge
+Schliff Init: schliff
 ================================
 
 Generated eval-suite.json:
@@ -19,4 +19,4 @@ Baseline Score: 100/100  [S]
 
 (dry-run: eval-suite.json was NOT written)
 
-Strong baseline! Run /skillforge:auto for final polish.
+Strong baseline! Run /schliff:auto for final polish.

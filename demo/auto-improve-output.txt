@@ -4,7 +4,7 @@ Baseline: 99.9/100 (6 dims)
 --- Iteration 1 ---
 Stopping: composite >= 98 (99.9)
 
-  SkillForge Auto-Improve Complete
+  Schliff Auto-Improve Complete
   ──────────────────────────────────────────────────
   Score:  100 → 100/100  ████████████████████  (+0.0)  [S]
   Iters:  0  |  Kept: 0  |  Time: 0s

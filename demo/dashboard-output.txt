@@ -1,5 +1,5 @@
 ======================================================================
-  SkillForge Health Dashboard: skillforge
+  Schliff Health Dashboard: schliff
 ======================================================================
 
   Structural Score: ████████████████████  99.9/100  [S]
@@ -22,7 +22,7 @@
 
   Untriaged Failures: 131
     - assertion_failed: 131
-  Run /skillforge:triage to investigate.
+  Run /schliff:triage to investigate.
 
   Achievements: ████░░░░░░  4/10
   ⚡ 🎯 💎 🟢

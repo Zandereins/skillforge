@@ -3,3 +3,5 @@
 {"timestamp":"2026-03-23T12:50:53Z","skill":"schliff","failure_type":"assertion_failed","assertion_id":"excl-1:excludes:Excludes existing text","confidence":0.9}
 {"timestamp":"2026-03-23T12:52:27Z","skill":"schliff","failure_type":"assertion_failed","assertion_id":"regex-1:pattern:Bad regex","confidence":0.9}
 {"timestamp":"2026-03-23T12:52:29Z","skill":"schliff","failure_type":"assertion_failed","assertion_id":"excl-1:excludes:Excludes existing text","confidence":0.9}
+{"timestamp":"2026-03-23T13:10:08Z","skill":"schliff","failure_type":"assertion_failed","assertion_id":"regex-1:pattern:Bad regex","confidence":0.9}
+{"timestamp":"2026-03-23T13:10:09Z","skill":"schliff","failure_type":"assertion_failed","assertion_id":"excl-1:excludes:Excludes existing text","confidence":0.9}

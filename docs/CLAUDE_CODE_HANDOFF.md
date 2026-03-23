@@ -49,8 +49,8 @@ In Cowork wurden 2 Verbesserungsrunden mit 5+ spezialisierten Subagents durchgef
 - skills/schliff/history/ (NEU, Verzeichnis erstellt)
 - README.md (aktualisiert)
 - .claude-plugin/marketplace.json + plugin.json (aktualisiert)
-- SKILLFORGE_FINAL_REPORT.md (Analysebericht)
-- SKILLFORGE_DEEP_ANALYSIS.md (initiale Tiefenanalyse)
+- SCHLIFF_FINAL_REPORT.md (Analysebericht)
+- SCHLIFF_DEEP_ANALYSIS.md (initiale Tiefenanalyse)
 
 ### Deine Aufgabe
 
@@ -78,7 +78,7 @@ Die zwei fehlenden Dimensionen (Quality, Edges) brauchen Runtime-Eval-Suites:
 4. Re-run scoring mit allen 6 Dimensionen
 
 **Phase 4: Plugin-Release vorbereiten**
-- Cleanup: SKILLFORGE_DEEP_ANALYSIS.md und SKILLFORGE_FINAL_REPORT.md entfernen oder nach docs/ verschieben
+- Cleanup: SCHLIFF_DEEP_ANALYSIS.md und SCHLIFF_FINAL_REPORT.md entfernen oder nach docs/ verschieben
 - Version bump in plugin.json
 - README.md mit finalen Scores aktualisieren
 - Tag + Release auf GitHub
