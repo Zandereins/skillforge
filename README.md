@@ -3,7 +3,7 @@
 The finishing cut for Claude Code skills.
 
 <p align="center">
-  <img src="demo/schliff-demo.gif" alt="Schliff improving a skill from 56.9 to 99.9" width="720">
+  <img src="demo/schliff-demo.gif?v=2" alt="Schliff improving a skill from 56.9 to 99.9" width="720">
 </p>
 
 ```
