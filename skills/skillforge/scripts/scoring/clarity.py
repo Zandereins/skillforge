@@ -21,29 +21,40 @@ _ARTICLES = frozenset({"the", "a", "an", "this", "that", "any", "all"})
 
 
 def _extract_action_pairs(text, pattern):
-    """Extract (verb, object) tuples from instruction patterns.
+    """Extract (verb, object, modifier) tuples from instruction patterns.
 
-    For "Always run the linter" → ("run", "linter").
+    For "Always run the linter" → ("run", "linter", "").
+    For "Never run tests in production" → ("run", "tests", "production").
     Articles between verb and object are skipped so that
-    "run the linter" and "run linter" both yield ("run", "linter").
+    "run the linter" and "run linter" both yield ("run", "linter", "").
 
-    The regex pattern captures two groups: (keyword, topic) where topic is
-    up to 2 words.  We take the verb from the topic, then scan remaining
-    words after the full match for the first non-article noun as the object.
+    The modifier captures context words after the object (e.g., "in production",
+    "without coverage") to distinguish instructions that share the same verb+object
+    but apply to different contexts. Only words on the same line are considered.
     """
     pairs = set()
     for match in pattern.finditer(text):
         topic = match.group(2).strip().split()
-        verb = topic[0].lower()
-        # Collect candidate object words: remaining topic words + words after match
-        after_match = text[match.end():].strip().split()
-        candidates = topic[1:] + after_match[:4]
+        verb = topic[0].lower().rstrip(".,;:!?")
+        # Only use words from the same line as context (not cross-line)
+        line_end = text.find("\n", match.end())
+        if line_end == -1:
+            line_end = len(text)
+        rest_of_line = text[match.end():line_end].strip().split()
+        candidates = topic[1:] + rest_of_line[:4]
         obj_candidates = [
-            w.lower() for w in candidates
-            if w.lower() not in _ARTICLES
+            w.lower().rstrip(".,;:!?") for w in candidates
+            if w.lower().rstrip(".,;:!?") not in _ARTICLES and w.lower().rstrip(".,;:!?")
         ]
         if obj_candidates:
-            pairs.add((verb, obj_candidates[0]))
+            obj_word = obj_candidates[0]
+            # Capture modifier: first non-article word after the object for context
+            modifier_candidates = [
+                w for w in obj_candidates[1:]
+                if w not in _ARTICLES
+            ]
+            modifier = modifier_candidates[0] if modifier_candidates else ""
+            pairs.add((verb, obj_word, modifier))
     return pairs
 
 
@@ -92,7 +103,7 @@ def score_clarity(skill_path: str) -> dict:
         score -= penalty
         issues.append(f"contradictions:{len(contradictions)}")
         details["contradictions"] = sorted(
-            f"{verb} {obj}" for verb, obj in contradictions
+            f"{verb} {obj}" for verb, obj, *_ in contradictions
         )
     details["always_count"] = len(always_pairs)
     details["never_count"] = len(never_pairs)

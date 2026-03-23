@@ -117,18 +117,27 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
     total_count = len(weights)
 
     warnings = []
-    if measured_count <= 2:
-        warnings.append(
-            f"Only {measured_count}/{total_count} dimensions measured "
-            f"(weight coverage: {confidence:.0%}). Score is unreliable — "
-            f"unmeasured: {', '.join(unmeasured)}"
-        )
-    elif measured_count <= 4:
-        warnings.append(
-            f"{measured_count}/{total_count} dimensions measured "
-            f"(weight coverage: {confidence:.0%}). "
-            f"Unmeasured: {', '.join(unmeasured)}"
-        )
+    # Only warn about non-opt-in unmeasured dimensions (runtime is opt-in)
+    warn_unmeasured = [d for d in unmeasured if d != "runtime"]
+    if warn_unmeasured:
+        if measured_count <= 2:
+            warnings.append(
+                f"Only {measured_count}/{total_count} dimensions measured "
+                f"(weight coverage: {confidence:.0%}). Score is unreliable — "
+                f"unmeasured: {', '.join(warn_unmeasured)}"
+            )
+        elif measured_count <= 4:
+            warnings.append(
+                f"{measured_count}/{total_count} dimensions measured "
+                f"(weight coverage: {confidence:.0%}). "
+                f"Unmeasured: {', '.join(warn_unmeasured)}"
+            )
+        else:
+            warnings.append(
+                f"{measured_count}/{total_count} dimensions measured "
+                f"(weight coverage: {confidence:.0%}). "
+                f"Unmeasured: {', '.join(warn_unmeasured)}"
+            )
 
     # Confidence notes: explain what each dimension can and cannot tell you
     confidence_notes = {

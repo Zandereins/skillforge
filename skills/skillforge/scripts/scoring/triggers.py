@@ -106,8 +106,9 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
 
         # Scale threshold down for small eval suites so skills with few
         # triggers can still accumulate enough overlap score.
+        # Floor at 1.5 to prevent single-term matches from passing.
         if num_triggers < 5:
-            threshold = threshold * (num_triggers / 5)
+            threshold = max(1.5, threshold * (num_triggers / 5))
 
         would_trigger = overlap_score >= threshold
 

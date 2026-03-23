@@ -69,8 +69,21 @@ def _score_structure_inline(skill_path: str) -> dict:
     else:
         issues.append("no_real_examples")
 
-    # Headers
-    header_count = len(_RE_HEADERS.findall(content))
+    # Headers — only count non-empty sections (anti-gaming)
+    all_headers = list(_RE_HEADERS.finditer(content))
+    header_count = 0
+    content_lines = content.split("\n")
+    for h_match in all_headers:
+        h_line = content[:h_match.start()].count("\n")
+        # Check next 5 lines for actual content (not blank or another header)
+        has_content = False
+        for j in range(h_line + 1, min(h_line + 6, len(content_lines))):
+            stripped = content_lines[j].strip()
+            if stripped and not stripped.startswith("#"):
+                has_content = True
+                break
+        if has_content:
+            header_count += 1
     if header_count >= 3:
         score += 10
     elif header_count >= 1:

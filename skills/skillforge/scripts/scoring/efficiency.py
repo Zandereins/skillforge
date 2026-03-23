@@ -71,11 +71,12 @@ def score_efficiency(skill_path: str) -> dict:
     # --- Compute score ---
 
     # Base score: information density (signal words / total words)
+    # Caps prevent gaming via repetitive markers (e.g., 10x "for example")
     signal_count = (
-        actionable_lines * 3 +  # High value: direct instructions
-        real_examples * 5 +      # High value: concrete examples
-        why_count * 2 +           # Medium value: reasoning
-        verification_cmds * 2     # Medium value: verifiable steps
+        min(actionable_lines, 20) * 3 +  # High value: direct instructions
+        min(real_examples, 3) * 5 +       # High value: concrete examples (capped)
+        min(why_count, 5) * 2 +           # Medium value: reasoning
+        min(verification_cmds, 5) * 2     # Medium value: verifiable steps
     )
     noise_count = (
         hedge_count * 3 +

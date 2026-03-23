@@ -575,16 +575,28 @@ class TestComputeComposite:
 
 class TestScoreClarity:
     def test_contradiction_detected(self, tmp_path):
-        # "always run" and "never run" on the same verb topic → contradiction
+        # Same verb+object+modifier → real contradiction
         content = (
             "---\nname: contradictory\ndescription: A skill\n---\n\n"
+            "Always run the linter.\n"
+            "Never run the linter.\n"
+        )
+        f = tmp_path / "SKILL.md"
+        f.write_text(content)
+        result = score_clarity(str(f))
+        assert any("contradiction" in issue for issue in result["issues"])
+
+    def test_context_aware_no_false_contradiction(self, tmp_path):
+        # Same verb+object but different context → NOT a contradiction
+        content = (
+            "---\nname: contextual\ndescription: A skill\n---\n\n"
             "Always run the linter before committing.\n"
             "Never run the linter on generated files.\n"
         )
         f = tmp_path / "SKILL.md"
         f.write_text(content)
         result = score_clarity(str(f))
-        assert any("contradiction" in issue for issue in result["issues"])
+        assert not any("contradiction" in issue for issue in result["issues"])
 
     def test_vague_references_lower_score(self, tmp_path):
         # "the file" without any preceding specific file reference is vague
