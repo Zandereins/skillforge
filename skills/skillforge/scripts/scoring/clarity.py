@@ -17,6 +17,36 @@ from scoring.patterns import (
 )
 
 
+_ARTICLES = frozenset({"the", "a", "an", "this", "that", "any", "all"})
+
+
+def _extract_action_pairs(text, pattern):
+    """Extract (verb, object) tuples from instruction patterns.
+
+    For "Always run the linter" → ("run", "linter").
+    Articles between verb and object are skipped so that
+    "run the linter" and "run linter" both yield ("run", "linter").
+
+    The regex pattern captures two groups: (keyword, topic) where topic is
+    up to 2 words.  We take the verb from the topic, then scan remaining
+    words after the full match for the first non-article noun as the object.
+    """
+    pairs = set()
+    for match in pattern.finditer(text):
+        topic = match.group(2).strip().split()
+        verb = topic[0].lower()
+        # Collect candidate object words: remaining topic words + words after match
+        after_match = text[match.end():].strip().split()
+        candidates = topic[1:] + after_match[:4]
+        obj_candidates = [
+            w.lower() for w in candidates
+            if w.lower() not in _ARTICLES
+        ]
+        if obj_candidates:
+            pairs.add((verb, obj_candidates[0]))
+    return pairs
+
+
 def score_clarity(skill_path: str) -> dict:
     """Score instruction clarity — detect contradictions, ambiguity, vague references.
 
@@ -51,22 +81,21 @@ def score_clarity(skill_path: str) -> dict:
     details: dict = {}
 
     # 1. Contradiction detection (30 pts)
-    # Find "always/never/must/must not" pairs on overlapping topics
-    # Compare first verb only to catch "always run X" vs "never run Y"
-    always_patterns = _RE_ALWAYS_PATTERNS.findall(prose_body)
-    never_patterns = _RE_NEVER_PATTERNS.findall(prose_body)
-
-    always_topics = {topic.lower().strip() for _, topic in always_patterns}
-    never_topics = {topic.lower().strip() for _, topic in never_patterns}
-    contradictions = always_topics & never_topics
+    # Extract (verb, object) pairs from "always/must" vs "never/must not" patterns.
+    # A contradiction exists when the same (verb, object) pair appears in both.
+    always_pairs = _extract_action_pairs(prose_body, _RE_ALWAYS_PATTERNS)
+    never_pairs = _extract_action_pairs(prose_body, _RE_NEVER_PATTERNS)
+    contradictions = always_pairs & never_pairs
 
     if contradictions:
         penalty = min(30, len(contradictions) * 10)
         score -= penalty
         issues.append(f"contradictions:{len(contradictions)}")
-        details["contradictions"] = sorted(contradictions)
-    details["always_count"] = len(always_patterns)
-    details["never_count"] = len(never_patterns)
+        details["contradictions"] = sorted(
+            f"{verb} {obj}" for verb, obj in contradictions
+        )
+    details["always_count"] = len(always_pairs)
+    details["never_count"] = len(never_pairs)
 
     # 2. Vague reference detection (25 pts)
     # "the file", "the script", "the output" without clear antecedent in preceding 3 lines

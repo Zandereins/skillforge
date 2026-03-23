@@ -76,7 +76,7 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
         matching_terms = []
         for term in prompt_terms & positive_desc_terms:
             # IDF weight: rarer terms in the eval suite matter more
-            idf = math.log(num_triggers / (term_doc_freq.get(term, 1) + 1)) + 1
+            idf = max(1.0, math.log(num_triggers / (term_doc_freq.get(term, 1) + 1)) + 1)
             overlap_score += idf
             matching_terms.append(term)
 
@@ -103,6 +103,11 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
             threshold = 2.5
         else:
             threshold = base_threshold
+
+        # Scale threshold down for small eval suites so skills with few
+        # triggers can still accumulate enough overlap score.
+        if num_triggers < 5:
+            threshold = threshold * (num_triggers / 5)
 
         would_trigger = overlap_score >= threshold
 

@@ -238,8 +238,17 @@ def _should_stop(state: list[dict], current_score: dict) -> tuple[bool, str]:
         return True, f"all dimensions >= 90"
 
     # EMA-based plateau detection: EMA ROI < 0.1 for 5 consecutive steps
-    qualifying = [e for e in state if e.get("status") in ("keep", "discard")]
-    if len(qualifying) >= 7:
+    qualifying = [e for e in state if e.get("status") in ("keep", "discard", "error")]
+
+    # Fast stop: 3 consecutive errors means the file can't be improved further
+    if len(qualifying) >= 3:
+        last_3 = qualifying[-3:]
+        if all(e.get("status") == "error" for e in last_3):
+            return True, "3 consecutive errors — skill may not be patchable"
+
+    # Filter to keep/discard only for EMA calculation
+    qualifying = [e for e in qualifying if e.get("status") in ("keep", "discard")]
+    if len(qualifying) >= 5:
         # Replay the EMA step-by-step (same alpha and formula as _compute_ema_roi)
         # and inspect the actual EMA value at each of the last 5 steps.
         alpha = 0.3
