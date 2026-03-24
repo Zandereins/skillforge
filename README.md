@@ -7,14 +7,14 @@ The finishing cut for Claude Code skills.
 </p>
 
 ```
-Baseline:  ██████░░░░░░░░░░░░░░  56.9/100  [D]
-After 18x: ████████████████████  99.9/100  [S]
+Baseline:  █████░░░░░░░░░░░░░░░  54.0/100  [D]
+After 18x: ████████████████████  98.3/100  [S]
 
 What changed:
-  Trigger accuracy   0% → 89%    Added keyword matching + negative boundaries
-  Structure         75 → 100     Added examples, edge cases, frontmatter
+  Structure         70 → 100     Added description, examples, concrete commands
   Efficiency        35 → 93      Removed hedging language, improved density
-  Composability     40 → 100     Added scope boundaries + handoff declarations
+  Composability     30 → 90      Added scope, error behavior, dependencies
+  Clarity           90 → 100     Resolved vague references
 ```
 
 > You wrote a skill. It worked. Three weeks later, triggers misfire, edge cases slip through, instructions contradict themselves. Schliff fixes all of it autonomously — deterministic patches, mechanical scoring, zero hallucinations.
