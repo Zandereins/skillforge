@@ -266,13 +266,14 @@ Create new skills with `skill-creator`. For crashing skills, suggest using
 
 ## Roadmap
 
-Planned subcommands (not yet implemented):
+Planned: `/schliff:mesh-evolve` (auto-fix mesh issues), `/schliff:predict` (strategy prediction), `/schliff:recall` (episodic memory recall).
 
-| Command | Purpose |
-|---------|---------|
-| `/schliff:mesh-evolve` | Mesh + generate fix actions (negative boundaries, stubs) |
-| `/schliff:predict` | Predict best strategy before trying (from cross-session data) |
-| `/schliff:recall` | Recall relevant past episodes from episodic memory |
+## Requirements & Compatibility
+
+Requires Python >= 3.9, Git >= 2.0, jq >= 1.6, Bash >= 4.0. No external Python
+packages — standard library only. All `/schliff:*` commands are namespaced.
+Safe to re-run — scorer is deterministic, auto-improve reverts on regression.
+If scoring fails, returns structured error instead of crashing.
 
 ## Files
 

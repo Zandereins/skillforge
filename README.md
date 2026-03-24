@@ -253,11 +253,11 @@ Schliff scores itself — 7 dimensions, same engine, no exceptions.
 
 | Metric | Value | What This Means |
 |--------|-------|-----------------|
-| Structural Score | **90.2 / 100** [A] | Production-ready. 10 composability sub-checks, stricter patterns. |
+| Structural Score | **95.4 / 100** [S] | Production-ready. 10 composability sub-checks, all passing. |
 | Tests | **340+ passing** | 219 unit + 101 integration + 14 self + 6 proof. Every scorer rule tested. |
 | Security | **40 fixes** | Shell injection, prompt injection, ReDoS, supply chain. |
 | Dimensions | **7 + runtime** | Transparent, rule-based, explainable scoring. |
-| Journey | v1.0 (62.5) → v6.0 (90.2) | 7 major versions. Continuous improvement, no regressions. |
+| Journey | v1.0 (62.5) → v6.0 (95.4) | 7 major versions. Continuous improvement, no regressions. |
 
 [Scoring methodology](docs/SCORING.md) | [Security details](CHANGELOG.md)
 
