@@ -182,7 +182,7 @@ Measures information density as signal per 100 words:
 - Penalties for excessive length without signal, too much whitespace
 - Bonuses for scope boundaries (+3) and conciseness under 300 lines (+5)
 
-### Composability (5%)
+### Composability (10%)
 
 Ten sub-checks at 10 pts each:
 
