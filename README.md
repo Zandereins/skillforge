@@ -5,6 +5,10 @@
 <h3 align="center">The deterministic skill linter & scoring engine for Claude Code</h3>
 
 <p align="center">
+  <img src="demo/schliff-demo.gif?v=3" alt="schliff score — bad skill [D] vs production skill [S]" width="720">
+</p>
+
+<p align="center">
   <i>schliff</i> (German) — the finishing cut. <i>"Den letzten Schliff geben"</i> = to give something its final polish.
 </p>
 
@@ -259,7 +263,7 @@ Schliff scores itself. Same engine, no exceptions.
 
 | Metric | Value |
 |--------|-------|
-| Structural Score | 98.3/100 [S] |
+| Structural Score | 95.7/100 [S] |
 | Tests | 540+ passing (unit + integration + benchmark + stress) |
 | Security fixes | 40 (shell injection, prompt injection, ReDoS, supply chain) |
 | Dependencies | Zero (Python 3.9+ stdlib only) |
