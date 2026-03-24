@@ -3,6 +3,37 @@
 All notable changes to Schliff are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [6.0.0] - 2026-03-24
+
+### Changed
+- **Rebrand: SkillForge → Schliff** — "the finishing cut" (German: den letzten Schliff geben)
+- All `/skillforge:*` commands renamed to `/schliff:*`
+- All internal references, paths, demo files updated
+
+### Added
+- **Clarity as default dimension** — 7th dimension always active (5% weight, opt-out via `--no-clarity`)
+- **Token cost estimation** — Doctor shows per-skill token cost + fleet total
+- **GitHub Action** — `Zandereins/schliff@v6` scores skills in CI, comments on PRs
+- **pip CLI** — `schliff score SKILL.md` works without Claude Code
+- **Actionable Doctor** — copy-paste commands with full skill paths
+- **Trigger confidence cap** — eval suites with <8 triggers capped at score 60
+- **Context-aware contradictions** — "run tests" vs "run tests in production" distinguished
+- **Anti-gaming headers** — empty sections don't count toward structure score
+- **Signal caps** — efficiency can't be gamed with repetitive markers
+- **Star badge** — GitHub stars visible in README
+- **"What Schliff Fixes" table** — concrete before/after improvements
+- **"Quality & Security" section** — trust signals front-loaded with "What This Means"
+- **"Next Steps" CTAs** — clear paths forward for visitors
+- 3 new unit tests (token estimation, context contradictions)
+
+### Fixed
+- Trigger threshold floor prevents false positives on small eval suites
+- Missing dimension warnings always shown (except opt-in runtime)
+- Clarity false positives on same verb with different context
+
+### Breaking
+- `--clarity` flag removed (clarity is now default; use `--no-clarity` to opt out)
+
 ## [5.1.1] - 2026-03-22
 
 ### Fixed

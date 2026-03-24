@@ -1,6 +1,6 @@
 {
   "name": "schliff",
-  "version": "3.0.0",
+  "version": "6.0.0",
   "description": "Autonomous skill improvement engine using the autoresearch loop pattern. Iteratively improves any Claude Code skill with measurable metrics.",
   "author": "Zandereins",
   "license": "MIT",

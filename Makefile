@@ -1,6 +1,6 @@
 .PHONY: test test-self test-proof test-all score lint install install-dev clean help
 
-SKILL_DIR := skills/skillforge
+SKILL_DIR := skills/schliff
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -17,7 +17,7 @@ test-proof: ## Run proof tests (6 tests)
 
 test-all: test test-self test-proof ## Run all test suites
 
-score: ## Score SkillForge's own SKILL.md
+score: ## Score Schliff's own SKILL.md
 	cd $(SKILL_DIR) && python3 scripts/score-skill.py SKILL.md
 
 score-json: ## Score with JSON output
@@ -26,10 +26,10 @@ score-json: ## Score with JSON output
 lint: ## Run ruff linter on scripts
 	ruff check $(SKILL_DIR)/scripts/ || echo "Install ruff: pip install ruff"
 
-install: ## Install SkillForge (copy mode)
+install: ## Install Schliff (copy mode)
 	bash install.sh
 
-install-dev: ## Install SkillForge (symlink mode for development)
+install-dev: ## Install Schliff (symlink mode for development)
 	bash install.sh --link
 
 clean: ## Remove __pycache__ and .pyc files
