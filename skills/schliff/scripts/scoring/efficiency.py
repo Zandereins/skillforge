@@ -42,7 +42,14 @@ def score_efficiency(skill_path: str) -> dict:
     # --- Signal indicators (what makes content valuable) ---
 
     # Actionable instructions (imperative verbs at line start)
-    actionable_lines = len(_RE_ACTIONABLE_LINES.findall(content))
+    # Deduplicate on full line content: repeated identical instructions are noise.
+    # Truncate to 80 chars to catch near-duplicates while preserving distinct instructions.
+    seen_actions = set()
+    for line in lines:
+        if _RE_ACTIONABLE_LINES.match(line.strip()):
+            key = line.strip().lower()[:80]
+            seen_actions.add(key)
+    actionable_lines = len(seen_actions)
 
     # Real examples (input/output pairs, not just code blocks)
     real_examples = len(_RE_REAL_EXAMPLES.findall(content))

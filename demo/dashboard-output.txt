@@ -2,27 +2,21 @@
   Schliff Health Dashboard: schliff
 ======================================================================
 
-  Structural Score: ████████████████████  99.9/100  [S]
-    [7/8 dimensions, 91% coverage]
+  Structural Score: ███████████████████░  95.4/100  [S]
+    [7/8 dimensions, 90% coverage]
 
   Dimensions:
     structure       ██████████  100/100
-    triggers        ██████████  100/100
-    quality         ██████████  100/100
+    triggers        █████████░   95/100
+    quality         █████████░   91/100
     edges           ██████████  100/100
-    efficiency      █████████░  93/100
+    efficiency      ████████░░   84/100
     composability   ██████████  100/100
     clarity         ██████████  100/100
 
-  Mesh Issues (4):
-    [WARNING] Broken ref: 'scripts'
-    [WARNING] Broken ref: 'community'
-    [WARNING] Broken ref: 'progress'
-    [WARNING] Broken ref: 'systematic-debugging'
+  Mesh Issues (0): None
 
-  Untriaged Failures: 131
-    - assertion_failed: 131
-  Run /schliff:triage to investigate.
+  Untriaged Failures: 0
 
   Achievements: ████░░░░░░  4/10
   ⚡ 🎯 💎 🟢

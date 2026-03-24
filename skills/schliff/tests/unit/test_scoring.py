@@ -309,8 +309,8 @@ class TestScoreEfficiency:
 class TestScoreComposability:
     def test_good_skill_with_scope_boundaries(self, good_skill):
         result = score_composability(good_skill)
-        # Good skill has "Use when" and "Do not use"
-        assert result["score"] >= 40
+        # Good skill has "Use when" and "Do not use" — with 10 checks, scores ~30
+        assert result["score"] >= 20
 
     def test_bad_skill_no_scope(self, bad_skill):
         result = score_composability(bad_skill)

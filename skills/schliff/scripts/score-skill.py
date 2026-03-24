@@ -168,4 +168,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Structured error output for --json callers
+        if "--json" in sys.argv:
+            json.dump({"error": str(e), "composite_score": 0, "dimensions": {}}, sys.stdout)
+            print()
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

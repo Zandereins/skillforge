@@ -28,6 +28,10 @@ def cmd_score(args):
     )
     from shared import load_eval_suite
 
+    if not Path(args.skill_path).exists():
+        print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
+        sys.exit(1)
+
     eval_suite = None
     if args.eval_suite:
         eval_suite = json.loads(Path(args.eval_suite).read_text(encoding="utf-8"))
@@ -91,7 +95,11 @@ def cmd_doctor(args):
 
 def cmd_version(_args):
     """Print version string."""
-    print("schliff 6.0.0")
+    try:
+        from importlib.metadata import version
+        print(f"schliff {version('schliff')}")
+    except Exception:
+        print("schliff 6.0.0")
 
 
 def main():

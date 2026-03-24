@@ -154,6 +154,7 @@ def _score_skill(skill_path: str, eval_suite: Optional[dict] = None) -> dict:
         "edges": scorer.score_edges(skill_path, eval_suite),
         "efficiency": scorer.score_efficiency(skill_path),
         "composability": scorer.score_composability(skill_path),
+        "clarity": scorer.score_clarity(skill_path),
     }
 
     # Runtime is opt-in (expensive, invokes claude CLI)
@@ -581,7 +582,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Don't write changes, just show plan")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose progress output")
-    parser.add_argument("--resume", action="store_true", help="Resume from previous state")
+    # Resume is implicit: state is loaded from auto-improve-state.jsonl if it exists
     args = parser.parse_args()
 
     if _MISSING_MODULES:

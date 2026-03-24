@@ -24,6 +24,9 @@ Repository = "https://github.com/Zandereins/schliff"
 where = ["."]
 include = ["skills*"]
 
+[tool.setuptools.package-data]
+"skills" = ["**/*.md", "**/*.json", "**/*.sh", "**/*.js", "**/*.yml"]
+
 [tool.ruff]
 target-version = "py39"
 line-length = 120

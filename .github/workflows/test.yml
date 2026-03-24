@@ -87,6 +87,20 @@ jobs:
           message: "${{ needs.test.outputs.test_passed }}/${{ needs.test.outputs.test_total }} passed"
           color: ${{ needs.test.outputs.test_passed == needs.test.outputs.test_total && 'brightgreen' || 'red' }}
 
+      - name: Compute grade
+        id: grade
+        shell: bash
+        env:
+          SCORE: ${{ needs.test.outputs.composite_score }}
+        run: |
+          if [ "$(echo "$SCORE >= 95" | bc -l)" -eq 1 ]; then GRADE="S";
+          elif [ "$(echo "$SCORE >= 85" | bc -l)" -eq 1 ]; then GRADE="A";
+          elif [ "$(echo "$SCORE >= 75" | bc -l)" -eq 1 ]; then GRADE="B";
+          elif [ "$(echo "$SCORE >= 65" | bc -l)" -eq 1 ]; then GRADE="C";
+          elif [ "$(echo "$SCORE >= 50" | bc -l)" -eq 1 ]; then GRADE="D";
+          else GRADE="F"; fi
+          echo "grade=$GRADE" >> "$GITHUB_OUTPUT"
+
       - name: Score badge
         uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483 # v1.7.0
         with:
@@ -94,7 +108,7 @@ jobs:
           gistID: 130bb61237b5b9b1536718e6a2296d4a
           filename: schliff-score.json
           label: Schliff
-          message: "${{ needs.test.outputs.composite_score }}/100 [S]"
+          message: "${{ needs.test.outputs.composite_score }}/100 [${{ steps.grade.outputs.grade }}]"
           color: >-
             ${{
               needs.test.outputs.composite_score >= 95 && 'brightgreen' ||

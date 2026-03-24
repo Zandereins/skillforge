@@ -18,6 +18,13 @@ inputs:
     description: 'Post score as PR comment'
     required: false
     default: 'true'
+outputs:
+  composite:
+    description: 'Composite score (0-100)'
+    value: ${{ steps.score.outputs.composite }}
+  result_b64:
+    description: 'Full JSON score result (base64 encoded)'
+    value: ${{ steps.score.outputs.result_b64 }}
 runs:
   using: 'composite'
   steps:
@@ -34,29 +41,49 @@ runs:
     - name: Run scorer
       id: score
       shell: bash
+      env:
+        INPUT_SKILL_PATH: ${{ inputs.skill-path }}
+        INPUT_EVAL_SUITE: ${{ inputs.eval-suite }}
       run: |
-        SKILL_FULL="${{ github.workspace }}/${{ inputs.skill-path }}"
+        SKILL_FULL="${GITHUB_WORKSPACE}/${INPUT_SKILL_PATH}"
         EVAL_FLAG=""
-        if [ -n "${{ inputs.eval-suite }}" ]; then
-          EVAL_FLAG="--eval-suite ${{ github.workspace }}/${{ inputs.eval-suite }}"
+        if [ -n "${INPUT_EVAL_SUITE}" ]; then
+          EVAL_FLAG="--eval-suite"
+          EVAL_PATH="${GITHUB_WORKSPACE}/${INPUT_EVAL_SUITE}"
         fi
         cd /tmp/schliff/skills/schliff/scripts
-        RESULT=$(python3 score-skill.py "$SKILL_FULL" $EVAL_FLAG --json 2>&1)
+
+        if [ -n "$EVAL_FLAG" ]; then
+          RESULT=$(python3 score-skill.py "$SKILL_FULL" "$EVAL_FLAG" "$EVAL_PATH" --json 2>/tmp/schliff_stderr) || true
+        else
+          RESULT=$(python3 score-skill.py "$SKILL_FULL" --json 2>/tmp/schliff_stderr) || true
+        fi
+
+        if [ -z "$RESULT" ] || ! echo "$RESULT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+          echo "::error::Schliff scorer produced invalid output. stderr: $(cat /tmp/schliff_stderr 2>/dev/null)"
+          exit 1
+        fi
+
         COMPOSITE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])")
         echo "composite=$COMPOSITE" >> "$GITHUB_OUTPUT"
-        echo "result<<EOF" >> "$GITHUB_OUTPUT"
-        echo "$RESULT" >> "$GITHUB_OUTPUT"
-        echo "EOF" >> "$GITHUB_OUTPUT"
+
+        # Write result to temp file to avoid heredoc injection
+        echo "$RESULT" > /tmp/schliff_result.json
+        RESULT_B64=$(base64 < /tmp/schliff_result.json)
+        echo "result_b64=$RESULT_B64" >> "$GITHUB_OUTPUT"
         echo "Score: $COMPOSITE/100"
 
     - name: Check minimum score
       if: inputs.minimum-score != '0'
       shell: bash
+      env:
+        COMPOSITE: ${{ steps.score.outputs.composite }}
+        MINIMUM: ${{ inputs.minimum-score }}
       run: |
         python3 -c "
-        import sys
-        score = float('${{ steps.score.outputs.composite }}')
-        minimum = float('${{ inputs.minimum-score }}')
+        import sys, os
+        score = float(os.environ['COMPOSITE'])
+        minimum = float(os.environ['MINIMUM'])
         if score < minimum:
             print(f'Score {score} is below minimum {minimum}')
             sys.exit(1)
@@ -68,7 +95,8 @@ runs:
       uses: actions/github-script@v7
       with:
         script: |
-          const result = JSON.parse(`${{ steps.score.outputs.result }}`);
+          const b64 = '${{ steps.score.outputs.result_b64 }}';
+          const result = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
           const score = result.composite_score;
           const dims = result.dimensions;
           const grade = score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 75 ? 'B' : score >= 65 ? 'C' : score >= 50 ? 'D' : 'F';

@@ -7,21 +7,21 @@ The finishing cut for Claude Code skills.
 </p>
 
 ```
-Baseline:  ██████░░░░░░░░░░░░░░  56.9/100  [D]
-After 18x: ████████████████████  99.9/100  [S]
+Baseline:  █████░░░░░░░░░░░░░░░  54.0/100  [D]
+After 18x: ████████████████████  98.3/100  [S]
 
 What changed:
-  Trigger accuracy   0% → 89%    Added keyword matching + negative boundaries
-  Structure         75 → 100     Added examples, edge cases, frontmatter
+  Structure         70 → 100     Added description, examples, concrete commands
   Efficiency        35 → 93      Removed hedging language, improved density
-  Composability     40 → 100     Added scope boundaries + handoff declarations
+  Composability     30 → 90      Added scope, error behavior, dependencies
+  Clarity           90 → 100     Resolved vague references
 ```
 
 > You wrote a skill. It worked. Three weeks later, triggers misfire, edge cases slip through, instructions contradict themselves. Schliff fixes all of it autonomously — deterministic patches, mechanical scoring, zero hallucinations.
 
 [![GitHub stars](https://img.shields.io/github/stars/Zandereins/schliff?style=flat-square)](https://github.com/Zandereins/schliff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json)](skills/schliff/scripts/test-integration.sh)
+[![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json)](.github/workflows/test.yml)
 [![Structural Score](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json)](skills/schliff/scripts/score-skill.py)
 [![v6.0.0](https://img.shields.io/badge/Version-6.0.0-F59E0B)](CHANGELOG.md)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-8A2BE2)](https://docs.anthropic.com/en/docs/claude-code/skills)
@@ -165,15 +165,15 @@ Full scoring methodology: [docs/SCORING.md](docs/SCORING.md)
   Schliff Health Dashboard: schliff
 ======================================================================
 
-  Structural Score: ████████████████████  99.9/100  [S]
-    [7/8 dimensions, 91% coverage]
+  Structural Score: ███████████████████░  95.4/100  [S]
+    [7/8 dimensions, 90% coverage]
 
   Dimensions:
     structure       ██████████  100/100
-    triggers        ██████████  100/100
-    quality         ██████████  100/100
+    triggers        █████████░   95/100
+    quality         █████████░   91/100
     edges           ██████████  100/100
-    efficiency      █████████░  93/100
+    efficiency      ████████░░   84/100
     composability   ██████████  100/100
     clarity         ██████████  100/100
 ======================================================================
@@ -185,17 +185,17 @@ Full scoring methodology: [docs/SCORING.md](docs/SCORING.md)
 
 ```
 Scoring baseline...
-Baseline: 99.9/100 (7 dims)
+Baseline: 95.4/100 (7 dims)
 
 --- Iteration 1 ---
-Stopping: composite >= 98 (99.9)
+Stopping: composite >= 98 (95.4)
 
   Schliff Auto-Improve Complete
   ──────────────────────────────────────────────────
-  Score:  100 → 100/100  ████████████████████  (+0.0)  [S]
-  Iters:  0  |  Kept: 0  |  Time: 0s
-  Stop:   composite >= 98 (99.9)
-  (dry run — no changes written)
+  Score:  95 → 95.4/100  ███████████████████░  (+0.0)  [S]
+  Iters:  0  |  Kept: 0  |  Time: 1s
+  Stop:   composite >= 98 (95.4)
+  (Already near-optimal — consider runtime eval for further gains)
 ```
 </details>
 
@@ -211,7 +211,7 @@ Stopping: composite >= 98 (99.9)
 
   Skill                      Score  Grade   Dims  Issues  Action
   --------------------------------------------------------------------
-  schliff                  100    [S]    7/8       0  Healthy
+  schliff                   90    [A]    7/8       0  Healthy
 
   Mesh Health: 68/100 (4 cross-skill issues)
   Run /schliff:mesh for details.
@@ -236,7 +236,7 @@ Stopping: composite >= 98 (99.9)
 | Trigger Confidence | Small eval suites (<8 triggers) capped at score 60 |
 | Context-aware Contradictions | "run tests" vs "run tests in production" distinguished |
 | Anti-gaming | Empty headers, repetitive markers, binary composability fixed |
-| 123 Unit Tests | +3 for token estimation, context contradictions |
+| 443 Tests (unit + integration + proof) | +70 stress tests, +28 edge cases, +76 patterns, +20 golden files |
 | 40 Security Fixes | Shell injection, prompt injection, ReDoS, supply chain |
 
 </details>
@@ -249,8 +249,8 @@ Schliff scores itself — 7 dimensions, same engine, no exceptions.
 
 | Metric | Value | What This Means |
 |--------|-------|-----------------|
-| Structural Score | **95.4 / 100** [S] | Production-ready. Catches 85% of issues without runtime. |
-| Tests | **123 passing** | Unit + integration + proof. Every scorer rule tested. |
+| Structural Score | **95.4 / 100** [S] | Production-ready. 10 composability sub-checks, all passing. |
+| Tests | **443 passing** | 318 unit + 99 integration + 20 self + 6 proof. Every scorer rule tested. |
 | Security | **40 fixes** | Shell injection, prompt injection, ReDoS, supply chain. |
 | Dimensions | **7 + runtime** | Transparent, rule-based, explainable scoring. |
 | Journey | v1.0 (62.5) → v6.0 (95.4) | 7 major versions. Continuous improvement, no regressions. |

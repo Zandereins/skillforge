@@ -2,14 +2,13 @@
   Schliff Doctor — Skill Health Check
 ======================================================================
 
-  1 skills scanned | 1 healthy | 4 mesh issues
+  1 skills scanned | 1 healthy | 0 mesh issues
 
   Skill                      Score  Grade   Dims  Issues  Action
   --------------------------------------------------------------------
-  schliff                  100    [S]    6/7       0  Healthy — consider runtime eval for
+  schliff                   95    [S]    7/8       0  Healthy
 
-  Mesh Health: 68/100 (4 cross-skill issues)
-  Run /schliff:mesh for details.
+  Mesh Health: 100/100 (0 cross-skill issues)
 
   NOTE: Scores are STRUCTURAL — they measure file organization,
   not runtime effectiveness. Use --runtime for validated scoring.

@@ -1,13 +1,13 @@
 Scoring baseline...
-Baseline: 99.9/100 (6 dims)
+Baseline: 95.4/100 (7 dims)
 
 --- Iteration 1 ---
-Stopping: composite >= 98 (99.9)
+Stopping: composite >= 98 (95.4)
 
   Schliff Auto-Improve Complete
   ──────────────────────────────────────────────────
-  Score:  100 → 100/100  ████████████████████  (+0.0)  [S]
-  Iters:  0  |  Kept: 0  |  Time: 0s
-  Stop:   composite >= 98 (99.9)
-  (dry run — no changes written)
+  Score:  95 → 95.4/100  ███████████████████░  (+0.0)  [S]
+  Iters:  0  |  Kept: 0  |  Time: 1s
+  Stop:   composite >= 98 (95.4)
+  (Already near-optimal — consider runtime eval for further gains)
 

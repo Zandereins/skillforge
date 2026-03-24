@@ -25,9 +25,9 @@ When runtime data is available, the composite score blends both tiers. When it i
 | **Eval Coverage (Quality)** | 20% | Assertion breadth (type diversity: contains, pattern, excludes, format), feature coverage (analyze, improve, report), assertion descriptions, instruction-assertion coherence | Whether following the skill produces correct output |
 | **Edge Coverage** | 15% | Edge case definitions in eval suite, category diversity (minimal input, invalid path, scale extreme, malformed input, missing deps, unicode), expected behaviors, edge assertions | Whether the skill handles edge cases correctly at runtime |
 | **Token Efficiency** | 10% | Information density (signal-to-noise ratio), actionable instructions, real examples, WHY-based reasoning, verification commands vs hedging, filler phrases, obvious instructions | Whether the content is actually useful to Claude |
-| **Composability** | 5% | Scope boundaries (positive + negative), global state assumptions, input/output contracts, handoff points to other skills, tool requirement flexibility | Whether the skill works correctly alongside other skills |
-| **Clarity** | *bonus* | Contradictions (always X vs never X), vague references ("the file" without antecedent), ambiguous pronouns (It/This/That without referent), instruction completeness (every "Run X" has a concrete command) | Whether instructions are clear to Claude in practice |
-| **Runtime** *(opt-in)* | 15% | **Actual Claude behavior** — invokes Claude with test prompts, checks `response_contains`, `response_matches`, `response_excludes` assertions against real output | — |
+| **Composability** | 10% | 10 sub-checks: scope boundaries, global state, I/O contracts, handoff points, tool flexibility, error behavior, idempotency, dependency declarations, namespace isolation, version compatibility | Whether the skill works correctly alongside other skills |
+| **Clarity** | 5% *(default)* | Contradictions (always X vs never X), vague references ("the file" without antecedent), ambiguous pronouns (It/This/That without referent), instruction completeness (every "Run X" has a concrete command). Opt-out via `--no-clarity`. | Whether instructions are clear to Claude in practice |
+| **Runtime** *(opt-in)* | 10% | **Actual Claude behavior** — invokes Claude with test prompts, checks `response_contains`, `response_matches`, `response_excludes` assertions against real output | — |
 
 ---
 
@@ -60,9 +60,9 @@ Key behaviors:
 2. **Weight coverage** — The scorer reports how many dimensions were actually measured and what fraction of total weight they represent. Low coverage triggers a warning.
 3. **Confidence indicator** — When only 2 or fewer dimensions are measured, the score is flagged as unreliable.
 
-### Clarity as Bonus Dimension
+### Clarity Dimension (Default)
 
-When `--clarity` is enabled, the clarity dimension gets a weight of `0.05`. The other dimension weights are scaled down proportionally so the total still sums to 1.0.
+Clarity is enabled by default since v6.0. It gets a weight of `0.05` (5%). The other dimension weights are scaled down proportionally so the total still sums to 1.0. Opt-out with `--no-clarity`.
 
 ### Coherence Bonus
 
@@ -80,8 +80,8 @@ triggers:       0.20  (20%)
 quality:        0.20  (20%)
 edges:          0.15  (15%)
 efficiency:     0.10  (10%)
-composability:  0.05  ( 5%)
-runtime:        0.15  (15%)  — only counted when enabled
+composability:  0.10  (10%)
+runtime:        0.10  (10%)  — only counted when enabled
 ```
 
 ---
@@ -177,21 +177,27 @@ Measures information density as signal per 100 words:
 
 - **Signal**: actionable instructions (x3), real examples (x5), WHY-reasoning (x2), verification commands (x2)
 - **Noise**: hedging language (x3), filler phrases (x2), obvious instructions (x2)
-- Density >= 8 = 95 pts, >= 5 = 85 pts, >= 3 = 75 pts, >= 1.5 = 65 pts, >= 0.5 = 55 pts, else 40 pts
+- Density mapped via sqrt curve: 0→40, 5→79, 10→95 (no step-function cliffs)
+- Actionable lines are deduplicated (near-duplicate instructions count once)
 - Penalties for excessive length without signal, too much whitespace
 - Bonuses for scope boundaries (+3) and conciseness under 300 lines (+5)
 
-### Composability (5%)
+### Composability (10%)
 
-Five sub-checks at 20 pts each:
+Ten sub-checks at 10 pts each:
 
 1. Clear scope boundaries (positive + negative triggers)
 2. No global state assumptions
 3. Input/output contract clarity
 4. Explicit handoff points to other skills
 5. No hard tool requirements without fallbacks
+6. Error/failure behavior described
+7. Idempotency/safety statement
+8. Dependency declarations
+9. Namespace/prefix isolation
+10. Version/compatibility notes
 
-### Clarity (bonus, opt-in)
+### Clarity (5%, default)
 
 Starts at 100 pts, deducts for issues:
 

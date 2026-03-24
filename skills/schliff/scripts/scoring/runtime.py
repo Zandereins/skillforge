@@ -60,7 +60,7 @@ def score_runtime(skill_path: str, eval_suite: Optional[dict] = None,
     try:
         content = read_skill_safe(skill_path)
     except (FileNotFoundError, ValueError):
-        return {"score": 0, "issues": ["file_not_found"], "details": {}}
+        return {"score": -1, "issues": ["file_not_found"], "details": {}}
 
     passed = 0
     total = 0

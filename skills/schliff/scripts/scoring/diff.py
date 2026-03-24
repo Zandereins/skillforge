@@ -5,7 +5,6 @@ score_efficiency() to determine net quality impact.
 """
 import re
 import subprocess
-import sys
 
 from scoring.patterns import _RE_DIFF_SIGNAL, _RE_DIFF_EXAMPLE, _RE_DIFF_NOISE
 
@@ -16,12 +15,8 @@ def score_diff(skill_path: str, diff_ref: str = "HEAD~1") -> dict:
     Classifies added/removed lines using signal/noise patterns from
     score_efficiency() to determine net quality impact.
     """
-    if diff_ref.startswith("-"):
-        print(f"Invalid diff reference (must not start with '-'): {diff_ref}", file=sys.stderr)
-        sys.exit(1)
-    if not re.match(r'^[a-zA-Z0-9_.~^@/\-]+$', diff_ref):
-        print(f"Invalid diff reference: {diff_ref}", file=sys.stderr)
-        sys.exit(1)
+    if diff_ref.startswith("-") or not re.match(r'^[a-zA-Z0-9_.~^@/\-]+$', diff_ref):
+        return {"available": False, "error": f"Invalid diff reference: {diff_ref}"}
     try:
         result = subprocess.run(
             ["git", "diff", diff_ref, "--", skill_path],

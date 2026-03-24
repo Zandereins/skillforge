@@ -7,16 +7,17 @@ Generated eval-suite.json:
   Test cases:  3 (7 assertions)
   Edge cases:  2 (2 assertions)
 
-Baseline Score: 100/100  [S]
+Baseline Score: 95.4/100  [S]
 
   structure       ██████████  100/100
-  triggers        ██████████  100/100
-  quality         ██████████  100/100
+  triggers        █████████░   95/100
+  quality         █████████░   91/100
   edges           ██████████  100/100
-  efficiency      █████████░  93/100
+  efficiency      ████████░░   84/100
   composability   ██████████  100/100
   runtime                     n/a
 
 (dry-run: eval-suite.json was NOT written)
 
 Strong baseline! Run /schliff:auto for final polish.
+

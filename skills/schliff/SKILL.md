@@ -95,7 +95,7 @@ Use constraints to prevent dimension degradation during optimization.
 | **Edge coverage** | Edge-case definition coverage | Edge case test suite | Does not verify handling at runtime |
 | **Token efficiency** | Instruction density (signal/noise) | `scripts/score-skill.py` | Cannot assess content usefulness |
 | **Composability** | Scope boundary declarations | Static analysis | Cannot verify multi-skill interaction |
-| **Clarity** *(opt-in)* | Contradiction + ambiguity score | `score-skill.py --clarity` | Pattern-based, not semantic |
+| **Clarity** *(default)* | Contradiction + ambiguity score | `score-skill.py` (opt-out: `--no-clarity`) | Pattern-based, not semantic |
 
 **Important:** These dimensions measure structural quality — how well-formed your skill file
 is. They do NOT measure runtime effectiveness. Use `scripts/runtime-evaluator.py` to invoke
@@ -266,13 +266,14 @@ Create new skills with `skill-creator`. For crashing skills, suggest using
 
 ## Roadmap
 
-Planned subcommands (not yet implemented):
+Planned: `/schliff:mesh-evolve` (auto-fix mesh issues), `/schliff:predict` (strategy prediction), `/schliff:recall` (episodic memory recall).
 
-| Command | Purpose |
-|---------|---------|
-| `/schliff:mesh-evolve` | Mesh + generate fix actions (negative boundaries, stubs) |
-| `/schliff:predict` | Predict best strategy before trying (from cross-session data) |
-| `/schliff:recall` | Recall relevant past episodes from episodic memory |
+## Requirements & Compatibility
+
+Requires Python >= 3.9, Git >= 2.0, jq >= 1.6, Bash >= 4.0. No external Python
+packages — standard library only. All `/schliff:*` commands are namespaced.
+Safe to re-run — scorer is deterministic, auto-improve reverts on regression.
+If scoring fails, returns structured error instead of crashing.
 
 ## Files
 

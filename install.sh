@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-VERSION="5.1.1"
+VERSION="6.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILLS_SRC="$SCRIPT_DIR/skills/schliff"
 COMMANDS_SRC="$SCRIPT_DIR/commands/schliff"
@@ -213,11 +213,9 @@ echo "  Installing..."
 install_dir "$SKILLS_SRC"   "$SKILLS_DST"   "skills"
 install_dir "$COMMANDS_SRC" "$COMMANDS_DST"  "commands"
 
-# --- Make scripts executable ---
-if [ "$LINK_MODE" -eq 0 ]; then
-    find "$SKILLS_DST/scripts" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
-    find "$SKILLS_DST/scripts" -name "*.py" -exec chmod +x {} \; 2>/dev/null || true
-fi
+# --- Make scripts executable (both copy and link mode) ---
+find "$SKILLS_DST/scripts" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
+find "$SKILLS_DST/scripts" -name "*.py" -exec chmod +x {} \; 2>/dev/null || true
 
 # --- Done ---
 echo ""

@@ -110,9 +110,27 @@ def _load_episodes() -> list[dict]:
     """Load all episodes from JSONL file."""
     if not EPISODES_PATH.exists():
         return []
-    if EPISODES_PATH.stat().st_size > MAX_FILE_SIZE:
-        print(f"Warning: episodes file exceeds {MAX_FILE_SIZE} bytes", file=sys.stderr)
-        return []
+    file_size = EPISODES_PATH.stat().st_size
+    if file_size > MAX_FILE_SIZE:
+        # Read only the tail of the file to recover from oversized state
+        print(f"Warning: episodes file exceeds {MAX_FILE_SIZE} bytes, reading tail", file=sys.stderr)
+        tail_bytes = MAX_FILE_SIZE // 2  # read last 5MB
+        with open(EPISODES_PATH, "rb") as f:
+            f.seek(max(0, file_size - tail_bytes))
+            raw = f.read().decode("utf-8", errors="replace")
+        # Skip first partial line
+        lines = raw.split("\n")
+        if len(lines) > 1:
+            lines = lines[1:]  # drop potentially truncated first line
+        episodes = []
+        for line in lines:
+            line = line.strip()
+            if line:
+                try:
+                    episodes.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return episodes
 
     episodes = []
     with open(EPISODES_PATH, "r", encoding="utf-8") as f:

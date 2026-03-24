@@ -31,8 +31,8 @@ skills/schliff/
 │   ├── run-eval.sh             # Binary assertion engine
 │   ├── progress.py             # Convergence analysis
 │   ├── runtime-evaluator.py    # Live Claude invocation testing
-│   ├── test-integration.sh     # 87 integration tests
-│   └── test-self.sh            # 12 self-tests (dogfooding)
+│   ├── test-integration.sh     # 99 integration tests
+│   └── test-self.sh            # 14 self-tests (dogfooding)
 ├── hooks/
 │   └── session-injector.js     # Surfaces failures at session start
 └── templates/

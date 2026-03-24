@@ -26,7 +26,7 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
     3. Handles negation in description ("do NOT use for X")
     4. Requires higher threshold for positive triggers
     """
-    if not eval_suite or "triggers" not in eval_suite:
+    if not eval_suite or "triggers" not in eval_suite or not eval_suite["triggers"]:
         return {"score": -1, "issues": ["no_trigger_eval_suite"], "details": {}}
 
     try:

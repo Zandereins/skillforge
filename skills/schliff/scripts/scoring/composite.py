@@ -70,8 +70,10 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
     # Apply custom weights if provided (highest priority)
     # Custom weights OVERRIDE defaults for specified keys but keep unspecified dimensions
     if custom_weights:
+        # Reject negative weights
         for k, v in custom_weights.items():
-            weights[k] = v
+            if isinstance(v, (int, float)) and v >= 0:
+                weights[k] = v
         # Normalize all weights to sum to 1.0
         total_w = sum(weights.values())
         if total_w > 0:

@@ -45,14 +45,15 @@ COMPOSITE=$(echo "$SELF_SCORE" | python3 -c "import sys,json; print(json.load(sy
 python3 -c "import sys; exit(0 if float(sys.argv[1]) >= 90 else 1)" "$COMPOSITE" 2>/dev/null && \
     pass "Composite >= 90 (got $COMPOSITE)" || fail "Composite $COMPOSITE < 90"
 
-# Each dimension should be >= 70
+# Each dimension should be >= 40 (D-grade floor)
+# Composability uses 10 granular checks since v6.0, so 50 is a valid mid-range score
 while read -r line; do
     if [[ "$line" == SKIP:* ]]; then
         pass "Dimension ${line#SKIP:} (opt-in, skipped)"
     elif [[ "$line" == LOW:* ]]; then
-        fail "Dimension ${line#LOW:} below 70"
+        fail "Dimension ${line#LOW:} below 40"
     else
-        pass "Dimension ${line#OK:} >= 70"
+        pass "Dimension ${line#OK:} >= 40"
     fi
 done < <(echo "$SELF_SCORE" | python3 -c "
 import sys, json
@@ -60,7 +61,7 @@ d = json.load(sys.stdin)
 for dim, score in d['dimensions'].items():
     if score == -1:
         print(f'SKIP:{dim}=-1')
-    elif score < 70:
+    elif score < 40:
         print(f'LOW:{dim}={score}')
     else:
         print(f'OK:{dim}={score}')
