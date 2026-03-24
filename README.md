@@ -165,7 +165,7 @@ Full scoring methodology: [docs/SCORING.md](docs/SCORING.md)
   Schliff Health Dashboard: schliff
 ======================================================================
 
-  Structural Score: ██████████████████░░  90.2/100  [A]
+  Structural Score: ███████████████████░  95.4/100  [S]
     [7/8 dimensions, 90% coverage]
 
   Dimensions:
@@ -174,7 +174,7 @@ Full scoring methodology: [docs/SCORING.md](docs/SCORING.md)
     quality         █████████░   91/100
     edges           ██████████  100/100
     efficiency      ████████░░   84/100
-    composability   █████░░░░░   50/100
+    composability   ██████████  100/100
     clarity         ██████████  100/100
 ======================================================================
 ```
@@ -185,21 +185,17 @@ Full scoring methodology: [docs/SCORING.md](docs/SCORING.md)
 
 ```
 Scoring baseline...
-Baseline: 90.2/100 (7 dims)
+Baseline: 95.4/100 (7 dims)
 
 --- Iteration 1 ---
-  [composability] +5.0  Added error behavior description
-  Score: 90.2 → 92.1  ██████████████████░░  [A]  KEEP
-
---- Iteration 3 ---
-  [composability] +3.0  Added dependency declarations
-  Score: 92.1 → 94.8  ███████████████████░  [A]  KEEP
+Stopping: composite >= 98 (95.4)
 
   Schliff Auto-Improve Complete
   ──────────────────────────────────────────────────
-  Score:  90 → 94.8/100  ███████████████████░  (+4.6)  [A]
-  Iters:  3  |  Kept: 2  |  Time: 12s
-  Stop:   EMA plateau (ROI < 0.5)
+  Score:  95 → 95.4/100  ███████████████████░  (+0.0)  [S]
+  Iters:  0  |  Kept: 0  |  Time: 1s
+  Stop:   composite >= 98 (95.4)
+  (Already near-optimal — consider runtime eval for further gains)
 ```
 </details>
 
@@ -309,10 +305,10 @@ skill-creator → v1 SKILL.md → /schliff:auto → autonomous grinding → ship
 Score your skill and add this to your README:
 
 ```markdown
-[![Schliff: 90 [A]](https://img.shields.io/badge/Schliff-90%2F100_%5BA%5D-green)](https://github.com/Zandereins/schliff)
+[![Schliff: 95 [S]](https://img.shields.io/badge/Schliff-95%2F100_%5BS%5D-brightgreen)](https://github.com/Zandereins/schliff)
 ```
 
-[![Schliff: 90 [A]](https://img.shields.io/badge/Schliff-90%2F100_%5BA%5D-green)](https://github.com/Zandereins/schliff)
+[![Schliff: 95 [S]](https://img.shields.io/badge/Schliff-95%2F100_%5BS%5D-brightgreen)](https://github.com/Zandereins/schliff)
 
 ---
 

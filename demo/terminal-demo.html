@@ -225,18 +225,18 @@
     await sleep(80);
     pushEmpty();
     await sleep(200);
-    pushLine([{cls:'dim', text:'Baseline Score: '}, {cls:'grade-D', text:'56.9/100  [D]'}]);
+    pushLine([{cls:'dim', text:'Baseline Score: '}, {cls:'grade-D', text:'54.0/100  [D]'}]);
     await sleep(400);
     pushEmpty();
     await sleep(200);
 
     // Dimension bars
     var dims = [
-      ['structure    ', 75, 100, '75/100', 'white'],
-      ['triggers     ', 0, 100, ' 0/100', 'red'],
-      ['quality      ', 0, 100, ' 0/100', 'red'],
-      ['edges        ', 0, 100, ' 0/100', 'red'],
+      ['structure    ', 70, 100, '70/100', 'white'],
+      ['triggers     ', 0, 100, ' n/a  ', 'red'],
       ['efficiency   ', 35, 100, '35/100', 'yellow'],
+      ['composability', 30, 100, '30/100', 'red'],
+      ['clarity      ', 90, 100, '90/100', 'green'],
       ['composability', 40, 100, '40/100', 'yellow'],
     ];
     for (var d = 0; d < dims.length; d++) {
@@ -262,18 +262,20 @@
     await sleep(400);
     pushLine([{cls:'dim', text:'Scoring baseline...'}]);
     await sleep(400);
-    pushLine([{cls:'dim', text:'Baseline: '}, {cls:'grade-D', text:'56.9/100'}, {cls:'dim', text:' (3 dims)'}]);
+    pushLine([{cls:'dim', text:'Baseline: '}, {cls:'grade-D', text:'54.0/100'}, {cls:'dim', text:' (4 dims)'}]);
     await sleep(600);
     pushEmpty();
     await sleep(300);
 
     // Iterations
     var iters = [
-      {n:1,  dim:'triggers',      delta:'+15.0', desc:'Added trigger keywords',     from:'56.9', to:'68.2', pct:68,  grade:'C'},
-      {n:3,  dim:'structure',     delta:'+8.0',  desc:'Added examples section',     from:'68.2', to:'78.4', pct:78,  grade:'B'},
-      {n:7,  dim:'quality',       delta:'+12.0', desc:'Generated eval assertions',  from:'78.4', to:'88.9', pct:89,  grade:'A'},
-      {n:12, dim:'efficiency',    delta:'+5.2',  desc:'Removed hedging language',   from:'88.9', to:'95.1', pct:95,  grade:'S'},
-      {n:18, dim:'composability', delta:'+4.8',  desc:'Added scope boundaries',     from:'95.1', to:'99.9', pct:100, grade:'S'},
+      {n:1,  dim:'structure',     delta:'+10.0', desc:'Added description to frontmatter', from:'54.0', to:'62.3', pct:62,  grade:'C'},
+      {n:3,  dim:'efficiency',    delta:'+12.0', desc:'Removed hedging language',         from:'62.3', to:'72.8', pct:73,  grade:'C'},
+      {n:5,  dim:'structure',     delta:'+8.0',  desc:'Added concrete examples',          from:'72.8', to:'80.2', pct:80,  grade:'B'},
+      {n:8,  dim:'composability', delta:'+6.0',  desc:'Added scope + handoff points',     from:'80.2', to:'86.5', pct:87,  grade:'A'},
+      {n:12, dim:'efficiency',    delta:'+5.5',  desc:'Removed filler phrases',           from:'86.5', to:'91.8', pct:92,  grade:'A'},
+      {n:16, dim:'composability', delta:'+4.2',  desc:'Added error behavior + deps',      from:'91.8', to:'96.1', pct:96,  grade:'S'},
+      {n:18, dim:'clarity',       delta:'+2.1',  desc:'Resolved vague references',        from:'96.1', to:'98.3', pct:98,  grade:'S'},
     ];
 
     for (var it = 0; it < iters.length; it++) {
@@ -322,7 +324,7 @@
       {cls:'dim', text:'  Score:  '},
       {cls:'red', text:'57'},
       {cls:'dim', text:' \u2192 '},
-      {cls:'grade-S', text:'99.9/100'},
+      {cls:'grade-S', text:'98.3/100'},
       {cls:'', text:'  '},
       {bar: [100, 100, 20]},
       {cls:'', text:'  '},
@@ -349,7 +351,7 @@
   async function runScene4() {
     await sleep(800);
     pushEmpty();
-    pushLine([{cls:'grade-S', text:'  [\u2605 Schliff: 99.9 [S]]'}]);
+    pushLine([{cls:'grade-S', text:'  [\u2605 Schliff: 98.3 [S]]'}]);
     await sleep(400);
     pushEmpty();
     pushLine([{cls:'dim', text:'  \u2192 '}, {cls:'cyan', text:'github.com/Zandereins/schliff'}]);

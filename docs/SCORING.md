@@ -25,9 +25,9 @@ When runtime data is available, the composite score blends both tiers. When it i
 | **Eval Coverage (Quality)** | 20% | Assertion breadth (type diversity: contains, pattern, excludes, format), feature coverage (analyze, improve, report), assertion descriptions, instruction-assertion coherence | Whether following the skill produces correct output |
 | **Edge Coverage** | 15% | Edge case definitions in eval suite, category diversity (minimal input, invalid path, scale extreme, malformed input, missing deps, unicode), expected behaviors, edge assertions | Whether the skill handles edge cases correctly at runtime |
 | **Token Efficiency** | 10% | Information density (signal-to-noise ratio), actionable instructions, real examples, WHY-based reasoning, verification commands vs hedging, filler phrases, obvious instructions | Whether the content is actually useful to Claude |
-| **Composability** | 5% | 10 sub-checks: scope boundaries, global state, I/O contracts, handoff points, tool flexibility, error behavior, idempotency, dependency declarations, namespace isolation, version compatibility | Whether the skill works correctly alongside other skills |
-| **Clarity** | *bonus* | Contradictions (always X vs never X), vague references ("the file" without antecedent), ambiguous pronouns (It/This/That without referent), instruction completeness (every "Run X" has a concrete command) | Whether instructions are clear to Claude in practice |
-| **Runtime** *(opt-in)* | 15% | **Actual Claude behavior** — invokes Claude with test prompts, checks `response_contains`, `response_matches`, `response_excludes` assertions against real output | — |
+| **Composability** | 10% | 10 sub-checks: scope boundaries, global state, I/O contracts, handoff points, tool flexibility, error behavior, idempotency, dependency declarations, namespace isolation, version compatibility | Whether the skill works correctly alongside other skills |
+| **Clarity** | 5% *(default)* | Contradictions (always X vs never X), vague references ("the file" without antecedent), ambiguous pronouns (It/This/That without referent), instruction completeness (every "Run X" has a concrete command). Opt-out via `--no-clarity`. | Whether instructions are clear to Claude in practice |
+| **Runtime** *(opt-in)* | 10% | **Actual Claude behavior** — invokes Claude with test prompts, checks `response_contains`, `response_matches`, `response_excludes` assertions against real output | — |
 
 ---
 
@@ -60,9 +60,9 @@ Key behaviors:
 2. **Weight coverage** — The scorer reports how many dimensions were actually measured and what fraction of total weight they represent. Low coverage triggers a warning.
 3. **Confidence indicator** — When only 2 or fewer dimensions are measured, the score is flagged as unreliable.
 
-### Clarity as Bonus Dimension
+### Clarity Dimension (Default)
 
-When `--clarity` is enabled, the clarity dimension gets a weight of `0.05`. The other dimension weights are scaled down proportionally so the total still sums to 1.0.
+Clarity is enabled by default since v6.0. It gets a weight of `0.05` (5%). The other dimension weights are scaled down proportionally so the total still sums to 1.0. Opt-out with `--no-clarity`.
 
 ### Coherence Bonus
 
@@ -197,7 +197,7 @@ Ten sub-checks at 10 pts each:
 9. Namespace/prefix isolation
 10. Version/compatibility notes
 
-### Clarity (bonus, opt-in)
+### Clarity (5%, default)
 
 Starts at 100 pts, deducts for issues:
 

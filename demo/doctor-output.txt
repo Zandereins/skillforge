@@ -6,7 +6,7 @@
 
   Skill                      Score  Grade   Dims  Issues  Action
   --------------------------------------------------------------------
-  schliff                   90    [A]    7/8       0  Healthy — consider runtime eval
+  schliff                   95    [S]    7/8       0  Healthy
 
   Mesh Health: 100/100 (0 cross-skill issues)
 

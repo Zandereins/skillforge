@@ -2,7 +2,7 @@
   Schliff Health Dashboard: schliff
 ======================================================================
 
-  Structural Score: ██████████████████░░  90.2/100  [A]
+  Structural Score: ███████████████████░  95.4/100  [S]
     [7/8 dimensions, 90% coverage]
 
   Dimensions:
@@ -11,7 +11,7 @@
     quality         █████████░   91/100
     edges           ██████████  100/100
     efficiency      ████████░░   84/100
-    composability   █████░░░░░   50/100
+    composability   ██████████  100/100
     clarity         ██████████  100/100
 
   Mesh Issues (0): None

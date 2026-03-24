@@ -1,17 +1,13 @@
 Scoring baseline...
-Baseline: 90.2/100 (7 dims)
+Baseline: 95.4/100 (7 dims)
 
 --- Iteration 1 ---
-  [composability] +5.0  Added error behavior description
-  Score: 90.2 → 92.1  ██████████████████░░  [A]  KEEP
-
---- Iteration 3 ---
-  [composability] +3.0  Added dependency declarations
-  Score: 92.1 → 94.8  ███████████████████░  [A]  KEEP
+Stopping: composite >= 98 (95.4)
 
   Schliff Auto-Improve Complete
   ──────────────────────────────────────────────────
-  Score:  90 → 94.8/100  ███████████████████░  (+4.6)  [A]
-  Iters:  3  |  Kept: 2  |  Time: 12s
-  Stop:   EMA plateau (ROI < 0.5)
+  Score:  95 → 95.4/100  ███████████████████░  (+0.0)  [S]
+  Iters:  0  |  Kept: 0  |  Time: 1s
+  Stop:   composite >= 98 (95.4)
+  (Already near-optimal — consider runtime eval for further gains)
 

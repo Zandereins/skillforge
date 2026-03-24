@@ -45,11 +45,11 @@ skills/schliff/
 ## Running Tests
 
 ```bash
-make test          # 99+ integration tests
-make test-self     # 12 self-tests (Schliff scores itself)
+make test          # 101 integration tests
+make test-self     # 20 self-tests (Schliff scores itself)
 make test-proof    # 6 proof tests (demonstrates real improvement)
-make test-all      # All of the above
-make score         # Score Schliff's own SKILL.md
+make test-all      # All of the above + 219 unit tests (pytest)
+make score         # Score Schliff's own SKILL.md (expect >= 90)
 ```
 
 All tests must pass before submitting a PR.

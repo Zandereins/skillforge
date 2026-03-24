@@ -95,7 +95,7 @@ Use constraints to prevent dimension degradation during optimization.
 | **Edge coverage** | Edge-case definition coverage | Edge case test suite | Does not verify handling at runtime |
 | **Token efficiency** | Instruction density (signal/noise) | `scripts/score-skill.py` | Cannot assess content usefulness |
 | **Composability** | Scope boundary declarations | Static analysis | Cannot verify multi-skill interaction |
-| **Clarity** *(opt-in)* | Contradiction + ambiguity score | `score-skill.py --clarity` | Pattern-based, not semantic |
+| **Clarity** *(default)* | Contradiction + ambiguity score | `score-skill.py` (opt-out: `--no-clarity`) | Pattern-based, not semantic |
 
 **Important:** These dimensions measure structural quality — how well-formed your skill file
 is. They do NOT measure runtime effectiveness. Use `scripts/runtime-evaluator.py` to invoke
