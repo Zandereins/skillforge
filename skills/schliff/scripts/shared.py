@@ -268,13 +268,18 @@ def validate_command_safety(cmd: str) -> tuple[bool, str]:
     if not is_allowlisted:
         return False, "command does not match any allowed prefix"
 
-    # Check blocklist even for allowlisted commands (except known false positives)
-    # Skip eval/exec check for allowlisted bash/python scripts (e.g., "run-eval.sh")
+    # Block python -c (arbitrary code execution) even though python3 is allowlisted
+    if re.match(r'^python3?\s+-[cmu]', cmd_stripped):
+        return False, "blocked: python -c/-m/-u (use script path instead)"
+
+    # Check blocklist even for allowlisted commands
     for pattern in _COMMAND_BLOCKLIST_RE:
         pat_str = pattern.pattern
         # Known false positive: \beval\b in "run-eval.sh", \bexec\b in "exec-task.sh"
-        if pat_str in (r'\beval\b', r'\bexec\b') and is_allowlisted:
-            continue
+        if pat_str in (r'\beval\b', r'\bexec\b'):
+            # Only skip for file-path patterns (not -c inline code)
+            if re.match(r'^(?:python3?|bash)\s+\S+\.(?:py|sh)', cmd_stripped):
+                continue
         if pattern.search(cmd_stripped):
             return False, f"blocked pattern: {pat_str}"
 

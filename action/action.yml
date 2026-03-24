@@ -22,9 +22,9 @@ outputs:
   composite:
     description: 'Composite score (0-100)'
     value: ${{ steps.score.outputs.composite }}
-  result:
-    description: 'Full JSON score result'
-    value: ${{ steps.score.outputs.result }}
+  result_b64:
+    description: 'Full JSON score result (base64 encoded)'
+    value: ${{ steps.score.outputs.result_b64 }}
 runs:
   using: 'composite'
   steps:

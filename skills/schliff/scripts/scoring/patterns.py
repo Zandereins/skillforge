@@ -21,7 +21,9 @@ _RE_ACTIONABLE_LINES = re.compile(
     r"^(?:\d+\.\s*)?(?:Read|Run|Check|Create|Add|Remove|Move|Use|Set|"
     r"Install|Configure|Deploy|Test|Verify|Build|Start|Stop|Open|Save|"
     r"Copy|Delete|Write|Edit|Update|Generate|Execute|Validate|Parse|"
-    r"Extract|Transform|Import|Export|Send|Fetch|Call|Return)\b",
+    r"Extract|Transform|Import|Export|Send|Fetch|Call|Return|"
+    r"Confirm|Document|List|Show|Print|Log|Review|Apply|Enable|Disable|"
+    r"Ensure|Define|Specify|Register|Mount|Scan|Inspect|Monitor)\b",
     re.MULTILINE,
 )
 _RE_WHY_COUNT = re.compile(

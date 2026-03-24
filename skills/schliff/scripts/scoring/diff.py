@@ -5,7 +5,6 @@ score_efficiency() to determine net quality impact.
 """
 import re
 import subprocess
-import sys
 
 from scoring.patterns import _RE_DIFF_SIGNAL, _RE_DIFF_EXAMPLE, _RE_DIFF_NOISE
 

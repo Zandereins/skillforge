@@ -596,7 +596,7 @@ def compute_gradients(
     # Dimension weights from scorer (match composite formula)
     DIM_WEIGHTS = {
         "structure": 0.15, "triggers": 0.20, "quality": 0.20,
-        "edges": 0.15, "efficiency": 0.10, "composability": 0.05, "clarity": 0.05,
+        "edges": 0.15, "efficiency": 0.10, "composability": 0.10, "clarity": 0.05,
     }
     CONFIDENCE_MULT = {"high": 1.0, "medium": 0.6, "low": 0.3}
 
@@ -857,6 +857,10 @@ def apply_patches(skill_path: str, patches: list[dict], dry_run: bool = False) -
         try:
             if op == "insert_before":
                 line_idx = patch["line"] - 1
+                if line_idx < 0 or line_idx > len(lines):
+                    errors.append(f"insert_before: line {patch['line']} out of range")
+                    skipped += 1
+                    continue
                 new_lines = patch["content"].rstrip("\n").split("\n")
                 lines[line_idx:line_idx] = new_lines
                 applied += 1
