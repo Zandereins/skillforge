@@ -24,6 +24,6 @@ Schliff processes skill files (SKILL.md) and eval suites (JSON). Security consid
 
 | Version | Supported |
 |---------|-----------|
-| 3.x     | Yes       |
-| 2.x     | Security fixes only |
-| 1.x     | No        |
+| 6.x     | Yes (current) |
+| 5.x     | Security fixes only |
+| < 5.0   | No        |

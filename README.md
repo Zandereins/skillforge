@@ -17,7 +17,7 @@ What changed:
   Clarity           90 → 100     Resolved vague references
 ```
 
-> You wrote a skill. It worked. Three weeks later, triggers misfire, edge cases slip through, instructions contradict themselves. Schliff fixes all of it autonomously — deterministic patches, mechanical scoring, zero hallucinations.
+> You wrote a skill. It worked. Three weeks later, triggers misfire, edge cases slip through, instructions contradict themselves. Schliff measures the damage (deterministic scoring, no LLM needed) and fixes it autonomously (Claude Code applies patches, measures delta, reverts regressions).
 
 [![GitHub stars](https://img.shields.io/github/stars/Zandereins/schliff?style=flat-square)](https://github.com/Zandereins/schliff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -28,22 +28,22 @@ What changed:
 
 ---
 
-## Try It — 3 minutes, zero config
+## Try It — Demo in 3 minutes
 
-> **Note:** Schliff commands (`/schliff:*`) run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code), not in a regular terminal. The installer checks all prerequisites.
+> **Note:** Schliff commands (`/schliff:*`) run inside [Claude Code](https://docs.anthropic.com/en/docs/claude-code), not in a regular terminal. Claude's intelligence decides which patches to apply — the scorer is deterministic, the improvement loop uses the LLM.
 
 ```bash
 # 1. Install once (terminal, ~1 min)
 git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 
-# 2. Score the demo skill (Claude Code, ~10 sec)
+# 2. Score the included demo skill (Claude Code, ~10 sec)
 /schliff:init demo/bad-skill/SKILL.md
 
-# 3. Watch it grind to [S] (Claude Code, ~2 min)
+# 3. Watch it improve the demo skill (Claude Code, ~2 min)
 /schliff:auto
 ```
 
-**What you'll see:** 18 autonomous iterations. Each one: patch → measure → keep or revert. Score climbs from 56 [D] to 99.9 [S]. Stops when ROI plateaus. No prompts, no babysitting.
+**What you'll see on the demo skill:** 18 autonomous iterations. Each one: patch → measure → keep or revert. Score climbs from 54 [D] to 98 [S]. Stops when ROI plateaus. Real-world skills take longer and may not reach [S] — complex skills plateau around [A] to [S] depending on their eval suite coverage.
 
 **Prerequisites:** Python 3.9+, Bash, Git, jq
 
@@ -79,7 +79,7 @@ Automated. No human intervention. Stops when ROI plateaus.
 
 **Autonomous** — Runs unattended. Applies patches, measures delta, reverts regressions, stops when ROI drops. No prompts, no babysitting.
 
-**Deterministic** — 60-70% of fixes are rule-based: frontmatter insertion, noise removal, TODO cleanup. No LLM needed. Same input, same output.
+**Deterministic scoring** — The 7-dimension scorer is pure Python, no LLM. Same input, same output. The improvement loop (`/schliff:auto`) runs inside Claude Code — Claude decides which patches to apply, but 60-70% of fixes follow deterministic rules (frontmatter, noise removal, TODO cleanup).
 
 **Empirical** — 7 scoring dimensions (structure, triggers, quality, edges, efficiency, composability, clarity) + optional runtime validation against actual Claude behavior.
 
@@ -136,9 +136,11 @@ Both run overnight. Both stop when ROI plateaus. Both improve unattended.
 
 Two modes, one decision:
 
-**Structural Score** (default) — Instant, zero cost. Measures file organization, trigger keywords, eval coverage, edge cases, efficiency, composability. Catches 85% of issues. Use for fast iteration.
+**Structural Score** (default) — Instant, zero LLM cost. Pure Python analysis of file organization, trigger keywords, eval coverage, edge cases, efficiency, composability. No API calls needed. Use `schliff score SKILL.md` from any terminal or `/schliff:bench` in Claude Code.
 
-**Runtime Score** (`--runtime`) — Invokes Claude with test prompts, validates actual behavior against assertions. Use before shipping to production.
+**Runtime Score** (`--runtime`) — Invokes Claude with test prompts, validates actual behavior against assertions. Requires Claude CLI. Use before shipping to production.
+
+**Improvement Loop** (`/schliff:auto`) — Runs **inside Claude Code**. Claude reads the scorer output, picks the highest-impact fix, patches the SKILL.md, re-scores, keeps or reverts. This is where the LLM intelligence lives. The scorer is the ruler; Claude is the craftsman.
 
 | Dimension | Weight | What It Measures |
 |-----------|--------|-----------------|
