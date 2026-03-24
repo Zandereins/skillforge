@@ -212,3 +212,140 @@ def render_score_card(score: float, grade: str, dims: dict) -> str:
             lines.append(f"    {dim:15s} {'n/a':>15s}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Score display (screenshot-ready CLI output)
+# ---------------------------------------------------------------------------
+
+def _score_status(score: float) -> str:
+    """Map a dimension score to a short status word."""
+    if score >= 100:
+        return "perfect"
+    if score >= 95:
+        return "excellent"
+    if score >= 85:
+        return "great"
+    if score >= 75:
+        return "good"
+    if score >= 65:
+        return "fair"
+    if score >= 50:
+        return "weak"
+    return "poor"
+
+
+def _color_status(status: str) -> str:
+    """Apply ANSI color to status word if TTY supports it."""
+    if not is_color_tty():
+        return status
+    colors = {
+        "perfect": "\x1b[35m",     # magenta
+        "excellent": "\x1b[35m",   # magenta
+        "great": "\x1b[32m",      # green
+        "good": "\x1b[32m",       # green
+        "fair": "\x1b[33m",       # yellow
+        "weak": "\x1b[31m",       # red
+        "poor": "\x1b[31m",       # red
+    }
+    color = colors.get(status, "")
+    return f"{color}{status}{RESET}"
+
+
+def _dim_bar(score: float, width: int = 10) -> str:
+    """Render a dimension bar using ░▒▓█ for visual gradient."""
+    if score < 0:
+        return "\u2591" * width
+    filled = min(width, int(round(score / 100 * width)))
+    empty = width - filled
+    bar = "\u2588" * filled + "\u2591" * empty
+    if not is_color_tty():
+        return bar
+    if score >= 80:
+        return f"\x1b[32m{bar}{RESET}"
+    if score >= 60:
+        return f"\x1b[33m{bar}{RESET}"
+    return f"\x1b[31m{bar}{RESET}"
+
+
+def format_score_display(
+    scores: dict,
+    composite: dict,
+    version: str = "",
+    contradictions: list | None = None,
+    fix_count: int = 0,
+) -> str:
+    """Format the full score output for `schliff score`.
+
+    Designed to look good in screenshots and terminal demos.
+
+    Args:
+        scores: Per-dimension score dicts {dim: {"score": float, ...}}.
+        composite: Result from compute_composite().
+        version: Version string (e.g. "6.0.1").
+        contradictions: List of contradiction strings from clarity scorer.
+        fix_count: Number of deterministic fixes available.
+    """
+    lines: list[str] = []
+
+    # Header
+    ver = f" v{version}" if version else ""
+    lines.append(f"schliff{ver}")
+    lines.append("")
+
+    # Dimension display order (skip runtime if not measured)
+    dim_order = ["structure", "triggers", "quality", "edges",
+                 "efficiency", "composability", "clarity"]
+
+    # Find max dim name length for alignment
+    active_dims = [d for d in dim_order if d in scores and scores[d].get("score", -1) >= 0]
+    label_w = max((len(d) for d in active_dims), default=15)
+
+    for dim in dim_order:
+        data = scores.get(dim, {})
+        s = data.get("score", -1)
+        if s < 0:
+            continue
+        bar = _dim_bar(s)
+        status = _score_status(s)
+        status_colored = _color_status(status)
+        lines.append(f"  {dim:<{label_w}}  {bar}  {s:>3.0f}/100  {status_colored}")
+
+    # Runtime (opt-in, show only if measured)
+    rt = scores.get("runtime", {})
+    if rt.get("score", -1) >= 0:
+        s = rt["score"]
+        bar = _dim_bar(s)
+        status_colored = _color_status(_score_status(s))
+        lines.append(f"  {'runtime':<{label_w}}  {bar}  {s:>3.0f}/100  {status_colored}")
+
+    # Separator + composite
+    lines.append("")
+    score_val = composite["score"]
+    grade = score_to_grade(score_val)
+    grade_str = grade_colored(grade)
+    composite_bar = _dim_bar(score_val, width=20)
+    score_type = composite.get("score_type", "structural")
+    type_label = "Structural Score" if score_type == "structural" else "Score"
+    lines.append(f"  {type_label}  {composite_bar}  {score_val}/100  {grade_str}")
+
+    # Warnings: contradictions
+    if contradictions:
+        lines.append("")
+        n = len(contradictions)
+        warn_prefix = f"\x1b[33m\u26a0{RESET}" if is_color_tty() else "\u26a0"
+        lines.append(f"  {warn_prefix} {n} contradiction{'s' if n != 1 else ''} detected (score-inflation blocked)")
+
+    # Composite warnings (unmeasured dimensions, low confidence)
+    for w in composite.get("warnings", []):
+        if "unmeasured" in w.lower() or "unreliable" in w.lower():
+            warn_prefix = f"\x1b[33m\u26a0{RESET}" if is_color_tty() else "\u26a0"
+            lines.append(f"  {warn_prefix} {w}")
+
+    # Fix count
+    if fix_count > 0:
+        arrow = f"\x1b[36m\u2192{RESET}" if is_color_tty() else "\u2192"
+        lines.append(f"  {arrow} {fix_count} deterministic fixes available. Run `schliff auto` to apply.")
+
+    lines.append("")
+    return "\n".join(lines)

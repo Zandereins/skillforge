@@ -8,6 +8,7 @@ from scoring.patterns import (
     _RE_ACTIONABLE_LINES, _RE_REAL_EXAMPLES, _RE_WHY_COUNT,
     _RE_VERIFICATION_CMDS, _RE_HEDGING, _RE_FILLER_PHRASES,
     _RE_OBVIOUS_INSTRUCTIONS, _RE_SCOPE_BOUNDARY,
+    _RE_CODE_BLOCK_REGION,
 )
 
 
@@ -71,6 +72,26 @@ def score_efficiency(skill_path: str) -> dict:
     # Instructions Claude already knows (generic coding advice)
     obvious_instructions = len(_RE_OBVIOUS_INSTRUCTIONS.findall(content))
 
+    # Repeated identical lines (content padding)
+    # Lines appearing 3+ times are noise — they add words without new information.
+    # Strip code blocks first (repeated code examples are often didactic, not padding).
+    # Exclude structural markers that naturally repeat in well-formed skills.
+    prose_content = _RE_CODE_BLOCK_REGION.sub("", content)
+    prose_lines = prose_content.strip().split("\n")
+    line_counts: dict[str, int] = {}
+    for line in prose_lines:
+        key = line.strip().lower()
+        if not key:
+            continue
+        # Skip structural markers that legitimately repeat
+        if (key.startswith("```")           # code block fences (residual)
+                or key.startswith("---")    # horizontal rules / frontmatter
+                or key.startswith("#")      # headers
+                or len(key) <= 3):          # very short tokens (e.g. "/foo")
+            continue
+        line_counts[key] = line_counts.get(key, 0) + 1
+    repeated_lines = sum(count - 1 for count in line_counts.values() if count >= 3)
+
     # Empty/near-empty lines ratio
     empty_lines = sum(1 for line in lines if not line.strip())
     empty_ratio = empty_lines / max(total_lines, 1)
@@ -88,7 +109,8 @@ def score_efficiency(skill_path: str) -> dict:
     noise_count = (
         hedge_count * 3 +
         filler_phrases * 2 +
-        obvious_instructions * 2
+        obvious_instructions * 2 +
+        repeated_lines * 2           # Repeated identical lines are padding
     )
 
     # Density = signal per 100 words, penalized by noise
@@ -130,6 +152,8 @@ def score_efficiency(skill_path: str) -> dict:
         issues.append(f"obvious_instructions:{obvious_instructions}")
     if total_words > 2000:
         issues.append(f"verbose:{total_words}_words")
+    if repeated_lines > 3:
+        issues.append(f"repeated_lines:{repeated_lines}")
 
     return {
         "score": min(100, max(0, score)),
@@ -145,5 +169,6 @@ def score_efficiency(skill_path: str) -> dict:
             "why_count": why_count,
             "hedge_count": hedge_count,
             "filler_phrases": filler_phrases,
+            "repeated_lines": repeated_lines,
         }
     }

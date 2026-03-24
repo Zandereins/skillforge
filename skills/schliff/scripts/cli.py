@@ -3,6 +3,7 @@
 
 Usage:
     schliff score <path>        Score a SKILL.md file
+    schliff verify <path>       CI gate — exit 0 if pass, 1 if fail
     schliff doctor              Scan all installed skills
     schliff version             Show version
 """
@@ -60,22 +61,73 @@ def cmd_score(args):
         }
         print(json.dumps(result, indent=2))
     else:
-        score = composite["score"]
-        grade = (
-            "S" if score >= 95 else
-            "A" if score >= 85 else
-            "B" if score >= 75 else
-            "C" if score >= 65 else
-            "D" if score >= 50 else
-            "F"
+        from terminal_art import format_score_display
+        import text_gradient
+
+        # Extract contradictions from clarity details
+        clarity_data = scores.get("clarity", {})
+        contradictions = clarity_data.get("details", {}).get("contradictions", [])
+
+        # Count available deterministic fixes
+        try:
+            gradients = text_gradient.compute_gradients(
+                args.skill_path, eval_suite, include_clarity=True,
+            )
+            fix_count = len(gradients)
+        except Exception:
+            fix_count = 0
+
+        # Get version
+        try:
+            from importlib.metadata import version
+            ver = version("schliff")
+        except Exception:
+            ver = "6.1.0"
+
+        output = format_score_display(
+            scores=scores,
+            composite=composite,
+            version=ver,
+            contradictions=contradictions if contradictions else None,
+            fix_count=fix_count,
         )
-        print(f"\nSchliff Score: {score}/100 [{grade}]")
-        for dim, data in scores.items():
-            s = data["score"]
-            if s >= 0:
-                indicator = "\u2713" if s >= 70 else "\u25b3" if s >= 50 else "\u2717"
-                print(f"  {indicator} {dim:15s} {s:>5}")
-        print()
+        print(output)
+
+
+def cmd_verify(args):
+    """CI gate — score a skill and exit with appropriate code."""
+    from pathlib import Path
+    from shared import load_eval_suite
+    import verify as verify_mod
+
+    if not Path(args.skill_path).exists():
+        print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
+        sys.exit(2)
+
+    eval_suite = None
+    if args.eval_suite:
+        eval_suite = json.loads(Path(args.eval_suite).read_text(encoding="utf-8"))
+    else:
+        eval_suite = load_eval_suite(args.skill_path)
+
+    try:
+        verdict = verify_mod.run_verify(
+            skill_path=args.skill_path,
+            min_score=args.min_score,
+            check_regression=args.regression,
+            history_path=args.history,
+            eval_suite=eval_suite,
+        )
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if getattr(args, "json", False):
+        print(json.dumps(verdict, indent=2))
+    else:
+        print(verify_mod.format_verdict(verdict))
+
+    sys.exit(verdict["exit_code"])
 
 
 def cmd_doctor(args):
@@ -99,7 +151,7 @@ def cmd_version(_args):
         from importlib.metadata import version
         print(f"schliff {version('schliff')}")
     except Exception:
-        print("schliff 6.0.0")
+        print("schliff 6.1.0")
 
 
 def main():
@@ -115,6 +167,18 @@ def main():
     score_parser.add_argument("--json", action="store_true", help="JSON output")
     score_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
 
+    # verify command
+    verify_parser = subparsers.add_parser("verify", help="CI gate — exit 0/1 based on score")
+    verify_parser.add_argument("skill_path", help="Path to SKILL.md")
+    verify_parser.add_argument("--min-score", type=float, default=75.0,
+                               help="Minimum passing score (default: 75)")
+    verify_parser.add_argument("--regression", action="store_true",
+                               help="Fail if score dropped vs previous run")
+    verify_parser.add_argument("--history", default=".schliff/history.jsonl",
+                               help="Path to history file (default: .schliff/history.jsonl)")
+    verify_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
+    verify_parser.add_argument("--json", action="store_true", help="JSON output")
+
     # doctor command
     doctor_parser = subparsers.add_parser("doctor", help="Scan all installed skills")
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
@@ -128,6 +192,7 @@ def main():
 
     commands = {
         "score": cmd_score,
+        "verify": cmd_verify,
         "doctor": cmd_doctor,
         "version": cmd_version,
     }

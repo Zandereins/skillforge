@@ -1,18 +1,21 @@
 ---
 name: schliff
 description: >
-  Disciplined skill improvement and measurement framework — the autoresearch
-  loop for Claude Code skills. Define a GOAL, primary METRIC, and VERIFY
-  method; Schliff iterates autonomously with fixed time budgets, mechanical
-  scoring, and NEVER pauses. Use for improving any skill on any domain: trigger
-  accuracy, output quality, edge coverage, token efficiency, composability, or
-  custom metrics. Works with community, custom, project-local, or global
-  skills. Trigger phrases: "make this skill better", "optimize my skill",
-  "iterate on this skill overnight", "improve [metric] from X to Y", "audit
-  skill", "review my skill", "harden skill", "benchmark skill", or paste
-  SKILL.md for auto-analysis. Also use when user shares skill without explicit
-  instructions. Do NOT use for brand-new skills from scratch — use
-  skill-creator first, then come to Schliff. Do NOT use for SQL query tuning. Do NOT use for prompt template authoring.
+  Deterministic skill linter and scoring engine for Claude Code — the Ruff for
+  SKILL.md files. 7-dimension structural scoring (structure, triggers, quality,
+  edges, efficiency, composability, clarity) with anti-gaming detection, 60-70%
+  rule-based patches, and cross-session episodic memory. An autoresearch loop
+  that measures first, then fixes — not the other way around. Use for linting,
+  scoring, and autonomously improving any Claude Code skill: trigger accuracy,
+  output quality, edge coverage, token efficiency, composability, or custom
+  metrics. Works with community, custom, project-local, or global skills.
+  Trigger phrases: "make this skill better", "optimize my skill", "iterate on
+  this skill overnight", "improve [metric] from X to Y", "audit skill",
+  "review my skill", "harden skill", "benchmark skill", "lint my skill",
+  "score my skill", or paste SKILL.md for auto-analysis. Also use when user
+  shares skill without explicit instructions. Do NOT use for brand-new skills
+  from scratch — use skill-creator first, then come to Schliff. Do NOT use for
+  SQL query tuning. Do NOT use for prompt template authoring.
 ---
 
 # Schliff — Skill Measurement & Iteration Framework

@@ -1,0 +1,69 @@
+name: Bug Report
+description: Something isn't scoring correctly or a command is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: skill-file
+    attributes:
+      label: Skill file
+      description: Paste the SKILL.md content (or a minimal reproduction).
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What should the scorer report?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What does it actually report?
+    validations:
+      required: true
+
+  - type: input
+    id: schliff-version
+    attributes:
+      label: Schliff version
+      description: Output of `schliff version`
+      placeholder: "schliff 6.0.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: score-output
+    attributes:
+      label: Score output
+      description: Output of `schliff score your-skill.md --json`
+      render: json
+
+  - type: dropdown
+    id: dimension
+    attributes:
+      label: Affected dimension
+      options:
+        - structure
+        - triggers
+        - quality
+        - edges
+        - efficiency
+        - composability
+        - clarity
+        - runtime
+        - composite
+        - other
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, OS, Claude Code version (if applicable)
+      placeholder: "Python 3.12, macOS 15.3, Claude Code 1.0.33"

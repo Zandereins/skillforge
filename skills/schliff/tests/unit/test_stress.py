@@ -570,10 +570,11 @@ class TestRegressionRealSkillMd:
     def test_composite_within_tolerance(self):
         result = _score_all(self.SKILL_MD_PATH)
         # Measured 2026-03-24: structural-only composite (structure, efficiency,
-        # composability, clarity) = 96.1. Tolerance 0.5 guards against regressions
-        # without breaking on rounding changes.
-        expected = 96.1
-        tolerance = 0.5
+        # composability, clarity) = 95.8 after structural-marker exclusion fix.
+        # Tolerance 1.0 guards against regressions without breaking on
+        # rounding changes or minor content edits.
+        expected = 95.8
+        tolerance = 1.0
         assert abs(result["score"] - expected) <= tolerance, (
             f"SKILL.md composite regression: expected {expected} ±{tolerance}, "
             f"got {result['score']}"

@@ -276,7 +276,7 @@ class TestScoreEfficiency:
 
     def test_density_boundary_at_eight_scores_ninety_five(self, tmp_path):
         # Craft content designed to hit density >= 8 bracket
-        # Many actionable lines (imperative verbs) and real examples
+        # Many UNIQUE actionable lines (imperative verbs) and real examples
         actionable = "\n".join([
             "Run the scoring script to evaluate your skill.",
             "Check the output for any issues listed.",
@@ -286,8 +286,16 @@ class TestScoreEfficiency:
             "Add concrete examples with input and output pairs.",
             "Review the efficiency dimension score carefully.",
             "Document the rationale behind each design decision.",
-        ] * 5)
-        examples = "\n```bash\npython3 score.py skill.md\n```\n" * 6
+            "Install the required dependencies before running.",
+            "Configure the environment variables for deployment.",
+            "Test the integration with the external service.",
+            "Validate the response format matches the schema.",
+            "Generate the report after scoring is complete.",
+            "Deploy the updated skill to production.",
+            "Monitor the trigger accuracy after deployment.",
+            "Create a backup before making changes.",
+        ])
+        examples = "\nFor example, run `python3 score.py skill.md`.\n"
         content = f"---\nname: dense\ndescription: Dense skill\n---\n\n{actionable}\n{examples}"
         f = tmp_path / "SKILL.md"
         f.write_text(content)
@@ -848,7 +856,7 @@ class TestDensityCurve:
 
     def test_density_ten_maps_to_near_95(self, tmp_path):
         """density >= 10 → score should reach the 90-100 range."""
-        # Build content with very high signal: many actionable lines + code examples
+        # Build content with very high signal: many UNIQUE actionable lines + code examples
         actionable = "\n".join([
             "Run the scoring script to evaluate your skill.",
             "Check the output for any issues listed.",
@@ -856,8 +864,20 @@ class TestDensityCurve:
             "Verify the score reaches the required threshold.",
             "Update the frontmatter to include a clear description.",
             "Add concrete examples with input and output pairs.",
-        ] * 3)
-        examples = "\n```bash\npython3 score.py skill.md\n```\n" * 4
+            "Install the required dependencies before starting.",
+            "Configure the project settings for production.",
+            "Test the integration with all external services.",
+            "Validate the response format against the schema.",
+            "Generate the final report after scoring completes.",
+            "Deploy the updated skill to the staging server.",
+            "Monitor the trigger accuracy after each change.",
+            "Create a snapshot before making modifications.",
+            "Review the composability score for conflicts.",
+            "Document the edge cases you discovered.",
+            "Build the eval suite from the skill examples.",
+            "Execute the benchmark against all test cases.",
+        ])
+        examples = "\n```bash\npython3 score.py skill.md\n```\n"
         content = (
             f"---\nname: high-density\ndescription: High density skill\n---\n\n"
             f"{actionable}\n{examples}"

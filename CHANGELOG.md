@@ -3,6 +3,25 @@
 All notable changes to Schliff are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [6.1.0] - 2026-03-24
+
+### Added
+- Description-aware trigger generation in init-skill (Issue #13)
+- Precision/recall reporting in trigger scorer
+- `schliff verify` command for CI integration (exit 0/1/2, --min-score, --regression)
+- Anti-gaming benchmark with 6 synthetic skills (6/6 detected)
+- Repetition detection in efficiency scorer (repeated identical lines count as noise)
+- Screenshot-ready `schliff score` output with per-dimension bars and status words
+- 100+ new tests (init-skill, precision/recall, verify, terminal_art, anti-gaming)
+
+### Fixed
+- Init script no longer generates Schliff-specific triggers for non-Schliff skills
+- Structural markers (code fences, headers, horizontal rules) excluded from repetition count
+- Code block content excluded from repetition counting (prevents false positives on examples)
+- `load_last_score` handles corrupted history entries without crashing
+- `run_verify` returns exit code 2 on file-not-found and scorer errors
+- ANSI reset constant used consistently in terminal_art output
+
 ## [6.0.0] - 2026-03-24
 
 ### Changed
