@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "schliff"
-version = "6.0.0"
+version = "6.0.1"
 description = "Autonomous skill improvement and measurement framework for Claude Code"
 license = {text = "MIT"}
 requires-python = ">=3.9"
