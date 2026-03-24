@@ -236,7 +236,7 @@ Stopping: composite >= 98 (95.4)
 | Trigger Confidence | Small eval suites (<8 triggers) capped at score 60 |
 | Context-aware Contradictions | "run tests" vs "run tests in production" distinguished |
 | Anti-gaming | Empty headers, repetitive markers, binary composability fixed |
-| 340+ Tests (unit + integration + proof) | +3 for token estimation, context contradictions |
+| 367+ Tests (unit + integration + proof) | +28 edge-case tests, +76 pattern tests, +20 golden-file tests |
 | 40 Security Fixes | Shell injection, prompt injection, ReDoS, supply chain |
 
 </details>
@@ -250,7 +250,7 @@ Schliff scores itself — 7 dimensions, same engine, no exceptions.
 | Metric | Value | What This Means |
 |--------|-------|-----------------|
 | Structural Score | **95.4 / 100** [S] | Production-ready. 10 composability sub-checks, all passing. |
-| Tests | **340+ passing** | 219 unit + 101 integration + 14 self + 6 proof. Every scorer rule tested. |
+| Tests | **367+ passing** | 248 unit + 99 integration + 20 self + 6 proof. Every scorer rule tested. |
 | Security | **40 fixes** | Shell injection, prompt injection, ReDoS, supply chain. |
 | Dimensions | **7 + runtime** | Transparent, rule-based, explainable scoring. |
 | Journey | v1.0 (62.5) → v6.0 (95.4) | 7 major versions. Continuous improvement, no regressions. |
