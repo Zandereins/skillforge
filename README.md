@@ -23,7 +23,7 @@ What changed:
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json)](.github/workflows/test.yml)
 [![Structural Score](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json)](skills/schliff/scripts/score-skill.py)
-[![v6.0.0](https://img.shields.io/badge/Version-6.0.0-F59E0B)](CHANGELOG.md)
+[![v6.0.1](https://img.shields.io/badge/Version-6.0.1-F59E0B)](CHANGELOG.md)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-8A2BE2)](https://docs.anthropic.com/en/docs/claude-code/skills)
 
 ---
