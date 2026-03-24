@@ -49,6 +49,83 @@ _GENERIC_NEGATIVES = [
 
 
 # ---------------------------------------------------------------------------
+# Description-aware domain extraction
+# ---------------------------------------------------------------------------
+
+def _extract_skill_purpose(desc: str, content: str) -> dict:
+    """Extract the skill's domain and purpose from its description and content.
+
+    Returns {"actions": [...], "use_when": [...], "domain_terms": [...]}.
+    Actions are verb-phrase strings describing what the skill does (e.g. "review code").
+    """
+    actions: list[str] = []
+    use_when: list[str] = []
+    domain_terms: list[str] = []
+    seen = set()
+
+    def _add_action(s: str) -> None:
+        s = s.strip().rstrip(".,;")
+        if s and s.lower() not in seen and 3 < len(s) < 80:
+            seen.add(s.lower())
+            actions.append(s)
+
+    def _add_use_when(s: str) -> None:
+        s = s.strip().rstrip(".,;")
+        if s and len(s) > 5:
+            use_when.append(s)
+
+    combined = f"{desc}\n{content}" if content else desc
+
+    # 1. "Use when ..." / "Trigger when ..." clauses → direct usage scenarios
+    for m in re.finditer(
+        r"(?:Use when|Trigger when|Invoke when|Activate (?:for|when))\s+(.+?)(?:\.|$)",
+        combined, re.IGNORECASE | re.MULTILINE,
+    ):
+        _add_use_when(m.group(1))
+
+    # 2. "<tool/framework/system/agent> for <purpose>" pattern
+    for m in re.finditer(
+        r"(?:tool|framework|system|agent|bot|helper|utility|plugin|skill)\s+(?:for|that)\s+(.+?)(?:\.|,|$)",
+        desc, re.IGNORECASE,
+    ):
+        _add_action(m.group(1))
+
+    # 3. Verb-object phrases from description (e.g. "reviews code", "generates tests")
+    for m in re.finditer(
+        r"\b((?:review|generate|create|analyze|test|deploy|debug|build|scan|lint|format|check|validate|monitor|detect|transform|convert|parse|extract|migrate|refactor|optimize|evaluate|measure|benchmark|score|audit|inspect|secure|harden|document|translate|compile|render|simulate|visualize|export|import|publish|sync|backup|restore|index|search|query|route|filter|aggregate|classify|annotate|summarize|explain|compare|diff|merge|rebase|cherry-pick|bisect|blame|log|trace|profile|serialize|deserialize|encode|decode|encrypt|decrypt|sign|verify|authenticate|authorize)(?:s|es|ed|ing)?\s+(?:the\s+)?[\w\s-]{2,40}?)\b",
+        desc, re.IGNORECASE,
+    ):
+        candidate = m.group(1).strip()
+        # Skip overly long or noisy matches
+        if len(candidate.split()) <= 6:
+            _add_action(candidate)
+
+    # 4. Extract quoted examples from description ("like this")
+    for m in re.finditer(r'["\']([^"\']{5,60})["\']', desc):
+        phrase = m.group(1).strip()
+        if any(c.isalpha() for c in phrase):
+            _add_action(phrase)
+
+    # 5. Domain-specific nouns (used for negative trigger differentiation)
+    domain_noun_re = re.compile(
+        r"\b((?:code|security|performance|accessibility|api|database|test|frontend|backend|"
+        r"infrastructure|deployment|monitoring|logging|authentication|authorization|"
+        r"review|PR|pull request|commit|branch|merge|CI|CD|pipeline|container|"
+        r"docker|kubernetes|terraform|ansible|migration|schema|query|endpoint|"
+        r"webhook|event|message|notification|email|chat|bot|agent|workflow|"
+        r"template|component|module|package|dependency|vulnerability|compliance|"
+        r"documentation|markdown|yaml|json|config|environment)\s*\w*)\b",
+        re.IGNORECASE,
+    )
+    for m in domain_noun_re.finditer(desc):
+        term = m.group(1).strip().lower()
+        if term not in domain_terms:
+            domain_terms.append(term)
+
+    return {"actions": actions, "use_when": use_when, "domain_terms": domain_terms}
+
+
+# ---------------------------------------------------------------------------
 # Frontmatter parsing
 # ---------------------------------------------------------------------------
 
@@ -214,65 +291,62 @@ def _slugify(name: str) -> str:
 
 
 def generate_positive_triggers(
-    name: str, desc: str, phrases: list[str]
+    name: str, desc: str, phrases: list[str], content: str = ""
 ) -> list[dict]:
     """Generate 5–8 positive trigger test cases.
 
-    Templates combine extracted phrases, keyword-based prompts, generic
-    fallbacks, and a skill-creator handoff scenario.
+    Uses description-aware generation: triggers match the skill's actual
+    domain, not Schliff's domain.  Falls back to name-based generic prompts
+    only when the description yields insufficient material.
     """
     slug = _slugify(name)
     triggers: list[dict] = []
 
-    # From extracted phrases (up to 3)
-    for i, phrase in enumerate(phrases[:3]):
+    purpose = _extract_skill_purpose(desc, content)
+
+    # Tier 1: From "Use when" / "Trigger when" clauses (highest quality)
+    for phrase in purpose["use_when"][:3]:
         triggers.append({
             "id": f"pos-{len(triggers) + 1}",
-            "prompt": f"Can you {phrase.lower()} for my {slug} skill?",
+            "prompt": phrase if len(phrase) > 15 else f"Can you {phrase.lower()}?",
+            "should_trigger": True,
+            "category": "positive",
+            "notes": f"From 'Use when' clause in SKILL.md",
+        })
+
+    # Tier 2: From extracted action phrases (description-derived)
+    for action in purpose["actions"][:3]:
+        if len(triggers) >= 6:
+            break
+        triggers.append({
+            "id": f"pos-{len(triggers) + 1}",
+            "prompt": f"Can you {action.lower()} for me?",
+            "should_trigger": True,
+            "category": "positive",
+            "notes": f"Derived from description action: \"{action}\"",
+        })
+
+    # Tier 3: From trigger-phrase extraction (existing logic)
+    for phrase in phrases[:3]:
+        if len(triggers) >= 7:
+            break
+        # Skip if we already generated a very similar trigger
+        prompt = f"Can you {phrase.lower()} for my {slug} skill?"
+        if any(phrase.lower()[:20] in t["prompt"].lower() for t in triggers):
+            continue
+        triggers.append({
+            "id": f"pos-{len(triggers) + 1}",
+            "prompt": prompt,
             "should_trigger": True,
             "category": "positive",
             "notes": f"Derived from extracted phrase: \"{phrase}\"",
         })
 
-    # From action keywords in description
-    keywords = []
-    for kw in _ACTION_VERBS:
-        if kw in desc.lower():
-            keywords.append(kw)
-    for kw in keywords[:2]:
-        triggers.append({
-            "id": f"pos-{len(triggers) + 1}",
-            "prompt": f"{kw.capitalize()} seems off in my skill, can you {kw} it?",
-            "should_trigger": True,
-            "category": "positive",
-            "notes": f"Keyword \"{kw}\" found in skill description",
-        })
-
-    # Generic improvement phrases
+    # Tier 4: Generic name-based fallbacks (domain-neutral, NOT schliff-specific)
     generic_prompts = [
-        (f"make my {slug} skill better", "Exact-match trigger phrase from SKILL.md"),
-        (f"optimize {slug}", "Short-form optimization request"),
-        (f"audit my {slug} skill", "Audit keyword with skill name"),
-        (
-            f"I just created {slug} with skill-creator, now grind it to production",
-            "skill-creator handoff pattern",
-        ),
-        (
-            f"my {slug} skill scores 45/100, I need it at 80+ before shipping",
-            "Numeric goal with autonomous improvement request",
-        ),
-        (
-            f"review my {slug} skill and show me what is wrong with it",
-            "Analysis-only request without path",
-        ),
-        (
-            f"harden my {slug} skill against malformed inputs and edge cases",
-            "Hardening / edge-coverage focus",
-        ),
-        (
-            f"benchmark my {slug} skill and show scores for all dimensions",
-            "Benchmark subcommand request",
-        ),
+        (f"I need help with {slug}", "Name-based request"),
+        (f"Can you run {slug} on this?", "Direct invocation"),
+        (f"Use {slug} to help me with this task", "Explicit skill reference"),
     ]
     for prompt_text, note in generic_prompts:
         if len(triggers) >= 8:
@@ -287,23 +361,22 @@ def generate_positive_triggers(
 
     # Guarantee minimum of 5
     while len(triggers) < 5:
-        idx = len(triggers) + 1
         triggers.append({
-            "id": f"pos-{idx}",
-            "prompt": f"iterate on my {slug} skill until it is production quality",
+            "id": f"pos-{len(triggers) + 1}",
+            "prompt": f"help me with {slug}",
             "should_trigger": True,
             "category": "positive",
-            "notes": "Generic iteration request",
+            "notes": "Generic fallback request",
         })
 
     return triggers[:8]
 
 
-def generate_negative_triggers(name: str, desc: str) -> list[dict]:
+def generate_negative_triggers(name: str, desc: str, content: str = "") -> list[dict]:
     """Generate 3–5 negative trigger test cases.
 
-    Parses "do NOT use" / "NOT for" clauses from description and always
-    includes a set of generic off-topic prompts.
+    Parses "do NOT use" / "NOT for" clauses from description and picks
+    generic off-topic prompts from domains unrelated to the skill.
     """
     slug = _slugify(name)
     triggers: list[dict] = []
@@ -324,23 +397,46 @@ def generate_negative_triggers(name: str, desc: str) -> list[dict]:
             "notes": f"Extracted from 'NOT for' clause: \"{clause}\"",
         })
 
-    # Generic negatives — always included
-    for text in _GENERIC_NEGATIVES:
+    # Pick generic negatives that are clearly outside the skill's domain
+    purpose = _extract_skill_purpose(desc, content)
+    domain_lower = " ".join(purpose["domain_terms"]).lower()
+
+    # Pool of off-topic prompts across many domains
+    negative_pool = [
+        ("Can you review this Python function for bugs?", "code review"),
+        ("Help me set up CI/CD for my repository", "ci/cd"),
+        ("Write me a unit test for this class", "testing"),
+        ("Refactor this module to use dependency injection", "refactoring"),
+        ("Debug why my API returns a 500 error", "debugging"),
+        ("Help me write a README for this project", "documentation"),
+        ("Set up pre-commit hooks with eslint and prettier", "linting"),
+        ("Deploy my application to production", "deployment"),
+        ("Optimize this SQL query for performance", "database"),
+        ("Help me design the authentication flow", "authentication"),
+        ("Create a Docker container for this service", "container"),
+        ("Translate this error message to German", "translation"),
+    ]
+
+    # Filter out prompts that overlap with the skill's domain
+    for text, domain in negative_pool:
         if len(triggers) >= 5:
             break
+        # Skip if this domain overlaps with the skill's domain
+        if domain in domain_lower or any(d in text.lower() for d in purpose["domain_terms"][:5]):
+            continue
         triggers.append({
             "id": f"neg-{len(triggers) + 1}",
             "prompt": text,
             "should_trigger": False,
             "category": "negative",
-            "notes": "Generic off-topic prompt — wrong domain",
+            "notes": f"Off-topic ({domain}) — outside skill domain",
         })
 
     # Guarantee minimum of 3
     extra_generics = [
-        f"Help me write a README for my {slug} project",
-        f"Set up pre-commit hooks with eslint and prettier",
-        f"Deploy my application to production",
+        "What is the weather like today?",
+        "Tell me a joke about programming",
+        "How do I make pasta carbonara?",
     ]
     i = 0
     while len(triggers) < 3 and i < len(extra_generics):
@@ -349,102 +445,107 @@ def generate_negative_triggers(name: str, desc: str) -> list[dict]:
             "prompt": extra_generics[i],
             "should_trigger": False,
             "category": "negative",
-            "notes": "Generic fallback negative",
+            "notes": "Clearly off-topic — unrelated domain",
         })
         i += 1
 
     return triggers[:5]
 
 
-def generate_edge_triggers(name: str) -> list[dict]:
+def generate_edge_triggers(name: str, desc: str = "") -> list[dict]:
     """Generate 2–3 edge trigger test cases covering ambiguous scenarios."""
     slug = _slugify(name)
-    return [
+    edges = [
         {
             "id": "edge-1",
-            "prompt": "improve my skill",
+            "prompt": f"something about {slug}",
             "should_trigger": True,
             "category": "edge",
-            "notes": "Minimal — no path, no context; should trigger and ask for details",
+            "notes": "Minimal — vague reference to skill name; should trigger and ask for details",
         },
         {
             "id": "edge-2",
-            "prompt": f"this SKILL.md looks weird, fix the formatting",
-            "should_trigger": True,
-            "category": "edge",
-            "notes": "Ambiguous — could be skill improvement or just formatting cleanup",
-        },
-        {
-            "id": "edge-3",
-            "prompt": f"benchmark my {slug} script",
+            "prompt": f"help me with this",
             "should_trigger": False,
             "category": "edge",
-            "notes": "Keyword overlap ('benchmark', skill name) but targets a script, not a skill",
+            "notes": "Too vague — no skill name or domain terms; should NOT trigger",
         },
     ]
+
+    # If description has domain terms, add an ambiguous domain-adjacent prompt
+    purpose = _extract_skill_purpose(desc, "")
+    if purpose["domain_terms"]:
+        term = purpose["domain_terms"][0]
+        edges.append({
+            "id": "edge-3",
+            "prompt": f"I have a question about {term}",
+            "should_trigger": False,
+            "category": "edge",
+            "notes": f"Domain-adjacent ('{term}') but not an actionable request",
+        })
+
+    return edges
 
 
 # ---------------------------------------------------------------------------
 # Test case and edge case generation
 # ---------------------------------------------------------------------------
 
-def generate_test_cases(name: str) -> list[dict]:
-    """Generate 2–3 functional test cases with inline assertions."""
+def generate_test_cases(name: str, desc: str = "") -> list[dict]:
+    """Generate 2–3 functional test cases with inline assertions.
+
+    Uses the skill description to generate domain-appropriate test prompts.
+    """
     slug = _slugify(name)
+    purpose = _extract_skill_purpose(desc, "")
+
+    # Build a representative prompt from the skill's domain
+    if purpose["use_when"]:
+        domain_prompt = purpose["use_when"][0]
+    elif purpose["actions"]:
+        domain_prompt = f"Can you {purpose['actions'][0].lower()}?"
+    else:
+        domain_prompt = f"Help me with {slug}"
+
     return [
         {
             "id": "tc-1",
-            "prompt": f"Analyze my {slug} skill and tell me what is wrong with it",
+            "prompt": domain_prompt,
             "input_files": [],
             "assertions": [
-                {
-                    "type": "contains",
-                    "value": "structure",
-                    "description": "Report includes structure dimension",
-                },
-                {
-                    "type": "contains",
-                    "value": "trigger",
-                    "description": "Report includes trigger analysis",
-                },
-                {
-                    "type": "pattern",
-                    "value": "\\d+/100",
-                    "description": "Report shows a numeric score",
-                },
                 {
                     "type": "excludes",
                     "value": "TODO",
                     "description": "No placeholder text in output",
                 },
+                {
+                    "type": "pattern",
+                    "value": "\\w{4,}",
+                    "description": "Produces meaningful output (not empty)",
+                },
             ],
         },
         {
             "id": "tc-2",
-            "prompt": f"Run one improvement iteration on my {slug} skill — focus on trigger accuracy",
+            "prompt": f"I need help with {slug}",
             "input_files": [],
             "assertions": [
                 {
-                    "type": "contains",
-                    "value": "commit",
-                    "description": "Makes a git commit",
-                },
-                {
                     "type": "pattern",
-                    "value": "(keep|discard)",
-                    "description": "Makes a keep/discard decision",
+                    "value": "\\w{4,}",
+                    "description": "Produces meaningful output",
                 },
             ],
         },
         {
             "id": "tc-3",
-            "prompt": "Improve my skill",
+            "prompt": f"help",
             "input_files": [],
             "assertions": [
                 {
                     "type": "pattern",
-                    "value": "\\?|path|which",
-                    "description": "Asks for clarification when no path is provided",
+                    "value": "\\?|which|what|specify|provide",
+                    "description": "Asks for clarification when prompt is too vague",
                 },
             ],
         },
@@ -517,10 +618,10 @@ def build_eval_suite(skill_path: str) -> dict:
 
     phrases = extract_trigger_phrases(content)
 
-    positive = generate_positive_triggers(name, desc, phrases)
-    negative = generate_negative_triggers(name, desc)
-    edge = generate_edge_triggers(name)
-    test_cases = generate_test_cases(name)
+    positive = generate_positive_triggers(name, desc, phrases, content)
+    negative = generate_negative_triggers(name, desc, content)
+    edge = generate_edge_triggers(name, desc)
+    test_cases = generate_test_cases(name, desc)
     edge_cases = generate_edge_cases(name)
 
     return {

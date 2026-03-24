@@ -117,6 +117,8 @@ def main():
         "warnings": composite_result["warnings"],
         "confidence_notes": composite_result.get("confidence_notes", {}),
         "dimensions": {k: v["score"] for k, v in scores.items()},
+        "trigger_precision": scores.get("triggers", {}).get("precision"),
+        "trigger_recall": scores.get("triggers", {}).get("recall"),
         "issues": {k: v["issues"] for k, v in scores.items() if v["issues"]},
         "details": {k: v["details"] for k, v in scores.items() if v["details"]},
     }
@@ -152,7 +154,11 @@ def main():
             s = data["score"]
             indicator = "\u2713" if s >= 70 else "\u25b3" if s >= 50 else "\u2717" if s >= 0 else "\u2014"
             score_str = f"{s}" if s >= 0 else "n/a"
-            print(f"  {indicator} {dim:15s} {score_str:>5s}")
+            # Show precision/recall inline for triggers dimension
+            extra = ""
+            if dim == "triggers" and "precision" in data and "recall" in data:
+                extra = f"  (P:{data['precision']:.0f}% R:{data['recall']:.0f}%)"
+            print(f"  {indicator} {dim:15s} {score_str:>5s}{extra}")
         print(f"{'='*60}")
 
         # Show warnings

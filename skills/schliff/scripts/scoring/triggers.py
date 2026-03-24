@@ -140,12 +140,20 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
     if false_negatives > 0:
         issues.append(f"false_negatives:{false_negatives}")
 
+    # Compute precision and recall (Issue #13)
+    true_positives = sum(1 for d in details_per_trigger if d["predicted"] and d["expected"])
+    precision = round(true_positives / (true_positives + false_positives) * 100, 1) if (true_positives + false_positives) > 0 else 100.0
+    recall = round(true_positives / (true_positives + false_negatives) * 100, 1) if (true_positives + false_negatives) > 0 else 100.0
+
     return {
         "score": score,
+        "precision": precision,
+        "recall": recall,
         "issues": issues,
         "details": {
             "correct": correct,
             "total": total,
+            "true_positives": true_positives,
             "false_positives": false_positives,
             "false_negatives": false_negatives,
             "per_trigger": details_per_trigger,
