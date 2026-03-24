@@ -5,7 +5,7 @@
 <h3 align="center">The deterministic skill linter & scoring engine for Claude Code</h3>
 
 <p align="center">
-  <img src="demo/schliff-demo.gif?v=3" alt="schliff score — bad skill [D] vs production skill [S]" width="720">
+  <img src="demo/schliff-demo.gif?v=4" alt="schliff score — bad skill [D] vs production skill [S]" width="600">
 </p>
 
 <p align="center">
