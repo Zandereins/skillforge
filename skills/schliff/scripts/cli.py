@@ -89,7 +89,7 @@ def cmd_score(args):
             from importlib.metadata import version
             ver = version("schliff")
         except Exception:
-            ver = "6.1.0"
+            ver = "6.2.0"
 
         output = format_score_display(
             scores=scores,
@@ -254,7 +254,7 @@ def cmd_version(_args):
         from importlib.metadata import version
         print(f"schliff {version('schliff')}")
     except Exception:
-        print("schliff 6.1.0")
+        print("schliff 6.2.0")
 
 
 def main():

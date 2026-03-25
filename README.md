@@ -16,11 +16,11 @@ schliff score path/to/SKILL.md
   <a href="skills/schliff/scripts/score-skill.py"><img alt="Structural Score" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json"></a>
   <a href=".github/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
-  <a href="CHANGELOG.md"><img alt="v6.1.0" src="https://img.shields.io/badge/v6.1.0-F59E0B?label=version"></a>
+  <a href="CHANGELOG.md"><img alt="v6.2.0" src="https://img.shields.io/badge/v6.2.0-F59E0B?label=version"></a>
 </p>
 
 ```
-schliff v6.1.0
+schliff v6.2.0
 
   structure      ██████████  100/100  perfect
   triggers       ██████████  100/100  perfect
@@ -177,7 +177,7 @@ schliff verify path/to/SKILL.md --min-score 75 --regression
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/Zandereins/schliff
-    rev: v6.1.0
+    rev: v6.2.0
     hooks:
       - id: schliff-verify
         args: ['--min-score', '75']

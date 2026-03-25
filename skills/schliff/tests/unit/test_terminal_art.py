@@ -188,9 +188,9 @@ class TestFormatScoreDisplay:
     def test_contains_version(self, monkeypatch):
         monkeypatch.setenv("NO_COLOR", "1")
         output = format_score_display(
-            _make_scores(), _make_composite(), version="6.1.0",
+            _make_scores(), _make_composite(), version="6.2.0",
         )
-        assert "v6.1.0" in output
+        assert "v6.2.0" in output
 
     def test_contains_all_dimensions(self, monkeypatch):
         monkeypatch.setenv("NO_COLOR", "1")
