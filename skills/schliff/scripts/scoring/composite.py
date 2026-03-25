@@ -4,6 +4,7 @@ Returns both the score and metadata about how many dimensions
 were actually measured, so users know how trustworthy the number is.
 """
 import json
+import math
 from typing import Optional
 from pathlib import Path
 
@@ -34,7 +35,7 @@ def _load_calibrated_weights() -> Optional[dict]:
 
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and all(isinstance(v, (int, float)) for v in data.values()):
+        if isinstance(data, dict) and all(isinstance(v, (int, float)) and math.isfinite(v) and v >= 0 for v in data.values()):
             _calibrated_weights_cache = data
             _calibrated_weights_mtime = current_mtime
             _calibrated_weights_path = path_str
@@ -72,7 +73,7 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
     if custom_weights:
         # Reject negative weights
         for k, v in custom_weights.items():
-            if k in weights and isinstance(v, (int, float)) and v >= 0:
+            if k in weights and isinstance(v, (int, float)) and math.isfinite(v) and v >= 0:
                 weights[k] = v
         # Normalize all weights to sum to 1.0
         total_w = sum(weights.values())

@@ -77,7 +77,7 @@ Iterations: 30
 **Regression guards:** Set floor constraints to prevent one dimension from
 regressing while improving another:
 
-```
+```bash
 /schliff
 Target: .claude/skills/deploy/SKILL.md
 Goal: Maximize trigger accuracy
@@ -104,7 +104,7 @@ See `references/metrics-catalog.md` for detailed rubrics and custom metric setup
 
 Define any metric computable by a shell command returning a number:
 
-```
+```bash
 Metric: "Time to first correct output (ms)"
 Verify: time bash scripts/run-eval.sh | grep "passed"
 ```
@@ -168,7 +168,7 @@ Run `/schliff:analyze` without a GOAL. Schliff will:
 4. Propose a ranked list of improvements with estimated iteration cost.
 5. Suggest GOAL + METRIC + VERIFY automatically. User confirms or overrides.
 
-Use discovery mode when the user says "my skill needs work" without specifying what.
+Use discovery mode when the user says "my skill needs work" without specifying what, e.g., `/schliff:analyze .claude/skills/deploy/SKILL.md`.
 
 ## Parallel Experimentation
 
@@ -218,7 +218,7 @@ Compare keep rates per strategy to prioritize high-ROI changes in the next sessi
 
 ## Lineage
 
-`/skill-creator` → v1 → `/schliff` → autonomous grinding → merge. Roll back via `git log --oneline history/`. For crashing skills: use `systematic-debugging` first, then Schliff.
+`/skill-creator` → v1 → `/schliff` → autonomous grinding → merge. Roll back via `git log --oneline history/`. For crashing skills: use `systematic-debugging` instead, then return to Schliff.
 
 ## Requirements & Compatibility
 
