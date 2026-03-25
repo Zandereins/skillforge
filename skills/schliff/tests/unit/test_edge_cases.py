@@ -309,30 +309,27 @@ description: A skill for testing deduplication of actionable lines.
         """Distinct imperative lines that are in the allowlist each count separately.
 
         BUG DOCUMENTED: 'Confirm' and 'Document' are missing from
-        _RE_ACTIONABLE_LINES in scoring/patterns.py, so they are silently
-        skipped.  Only the 3 verbs that ARE in the allowlist (Run, Check,
-        Verify) contribute.  This test pins the current behaviour so any
-        future change is visible.  The pattern should be extended to include
-        at least: Confirm, Document, List, Show, Print, Log, Review, Apply.
+        _RE_ACTIONABLE_LINES in scoring/patterns.py.  All 5 verbs (Run,
+        Check, Verify, Confirm, Document) are in the allowlist and count
+        as actionable lines.
         """
         lines_in_allowlist = [
             "Run the analysis.",    # 'Run' is in the allowlist
             "Check the output.",   # 'Check' is in the allowlist
             "Verify the result.",  # 'Verify' is in the allowlist
         ]
-        lines_missing_from_allowlist = [
-            "Confirm the findings.",  # BUG: 'Confirm' not in _RE_ACTIONABLE_LINES
-            "Document the outcome.",  # BUG: 'Document' not in _RE_ACTIONABLE_LINES
+        lines_also_in_allowlist = [
+            "Confirm the findings.",
+            "Document the outcome.",
         ]
         skill_path = self._skill_with_lines(
-            tmp_path, lines_in_allowlist + lines_missing_from_allowlist
+            tmp_path, lines_in_allowlist + lines_also_in_allowlist
         )
         result = score_efficiency(skill_path)
         # All 5 lines match — Confirm and Document are now in _RE_ACTIONABLE_LINES.
         assert result["details"]["actionable_lines"] == 5, (
             f"Expected all 5 actionable lines to match, "
-            f"got {result['details']['actionable_lines']}. "
-            f"If this is now 5, the bug in _RE_ACTIONABLE_LINES has been fixed — update this test."
+            f"got {result['details']['actionable_lines']}."
         )
 
     def test_near_duplicate_within_80_chars_deduplicated(self, tmp_path):

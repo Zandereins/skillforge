@@ -107,7 +107,7 @@ git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 | Skill | Before | After | Iterations | Author |
 |-------|--------|-------|------------|--------|
 | demo skill (`demo/bad-skill/`) | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
-| agent-review-panel | 89.1 [A] | 90.8 [A] | 8 | [@wan-huiyan](https://github.com/wan-huiyan) |
+| agent-review-panel | 64.0 [D] | 85.6 [A] | 3 rounds | [@wan-huiyan](https://github.com/wan-huiyan) |
 
 The demo skill — a vague, hedging-filled deployment helper — goes from [D] to [S] in 18 autonomous iterations:
 
@@ -124,6 +124,12 @@ The demo skill — a vague, hedging-filled deployment helper — goes from [D] t
 Real-world skills vary. Complex skills plateau around [A] to [S] depending on eval suite coverage.
 
 *Run `schliff score` on your skill and [add your result](https://github.com/Zandereins/schliff/edit/main/README.md).*
+
+### Community
+
+> "It's become a core part of my skill development workflow!" — [@wan-huiyan](https://github.com/wan-huiyan)
+
+[@wan-huiyan](https://github.com/wan-huiyan) used schliff to improve [agent-review-panel](https://github.com/wan-huiyan/claude-client-proposal-slide) from 64 to 85.6 across three rounds. Along the way, SKILL.md went from 1,331 to 340 lines — a 75% token reduction via `references/` extraction. A/B testing on a 1,132-line document confirmed identical review quality with fewer tokens.
 
 ---
 

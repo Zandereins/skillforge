@@ -64,21 +64,22 @@ def _score_structure_inline(skill_path: str) -> dict:
     code_block_pairs = len(_RE_CODE_BLOCKS.findall(content)) // 2
     if real_examples >= 2:
         score += 10
-    elif real_examples >= 1 or (real_examples + code_block_pairs // 3) >= 2:
+    elif real_examples >= 1 or code_block_pairs // 3 >= 2:
         score += 5
+        if real_examples == 0:
+            issues.append("no_real_examples")
     else:
         issues.append("no_real_examples")
 
     # Headers — only count non-empty sections (anti-gaming)
     all_headers = list(_RE_HEADERS.finditer(content))
     header_count = 0
-    content_lines = content.split("\n")
     for h_match in all_headers:
         h_line = content[:h_match.start()].count("\n")
         # Check next 5 lines for actual content (not blank or another header)
         has_content = False
-        for j in range(h_line + 1, min(h_line + 6, len(content_lines))):
-            stripped = content_lines[j].strip()
+        for j in range(h_line + 1, min(h_line + 6, len(lines))):
+            stripped = lines[j].strip()
             if stripped and not stripped.startswith("#"):
                 has_content = True
                 break

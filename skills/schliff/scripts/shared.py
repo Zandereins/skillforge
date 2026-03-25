@@ -106,8 +106,10 @@ def estimate_token_cost(skill_path: str) -> int:
 
     # Check for references/ directory alongside SKILL.md
     refs_dir = Path(skill_path).parent / "references"
-    if refs_dir.is_dir():
+    if refs_dir.is_dir() and not refs_dir.is_symlink():
         for ref_file in sorted(refs_dir.glob("*.md")):
+            if ref_file.is_symlink():
+                continue
             try:
                 ref_content = ref_file.read_text(encoding="utf-8", errors="replace")
                 if len(ref_content) <= MAX_SKILL_SIZE:

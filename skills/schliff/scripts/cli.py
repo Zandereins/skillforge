@@ -27,7 +27,7 @@ def cmd_score(args):
         score_composability, score_quality, score_edges,
         score_runtime, score_clarity, compute_composite,
     )
-    from shared import load_eval_suite
+    from shared import load_eval_suite, MAX_SKILL_SIZE
 
     if not Path(args.skill_path).exists():
         print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
@@ -35,7 +35,14 @@ def cmd_score(args):
 
     eval_suite = None
     if args.eval_suite:
-        eval_suite = json.loads(Path(args.eval_suite).read_text(encoding="utf-8"))
+        eval_path = Path(args.eval_suite)
+        if not eval_path.exists():
+            print(f"Error: eval-suite not found: {args.eval_suite}", file=sys.stderr)
+            sys.exit(1)
+        if eval_path.stat().st_size > MAX_SKILL_SIZE:
+            print(f"Error: eval-suite exceeds {MAX_SKILL_SIZE} byte size limit", file=sys.stderr)
+            sys.exit(1)
+        eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
     else:
         eval_suite = load_eval_suite(args.skill_path)
 
@@ -97,7 +104,7 @@ def cmd_score(args):
 def cmd_verify(args):
     """CI gate — score a skill and exit with appropriate code."""
     from pathlib import Path
-    from shared import load_eval_suite
+    from shared import load_eval_suite, MAX_SKILL_SIZE
     import verify as verify_mod
 
     if not Path(args.skill_path).exists():
@@ -106,7 +113,14 @@ def cmd_verify(args):
 
     eval_suite = None
     if args.eval_suite:
-        eval_suite = json.loads(Path(args.eval_suite).read_text(encoding="utf-8"))
+        eval_path = Path(args.eval_suite)
+        if not eval_path.exists():
+            print(f"Error: eval-suite not found: {args.eval_suite}", file=sys.stderr)
+            sys.exit(2)
+        if eval_path.stat().st_size > MAX_SKILL_SIZE:
+            print(f"Error: eval-suite exceeds {MAX_SKILL_SIZE} byte size limit", file=sys.stderr)
+            sys.exit(2)
+        eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
     else:
         eval_suite = load_eval_suite(args.skill_path)
 
@@ -134,14 +148,16 @@ def cmd_doctor(args):
     """Run doctor scan across all installed skills."""
     import doctor as doctor_mod
 
+    verbose = getattr(args, "verbose", False)
     report = doctor_mod.run_doctor(
         skill_dirs=getattr(args, "skill_dirs", None),
+        verbose=verbose,
     )
 
     if getattr(args, "json", False):
         print(json.dumps(report, indent=2))
     else:
-        formatted = doctor_mod.format_doctor_report(report)
+        formatted = doctor_mod.format_doctor_report(report, verbose=verbose)
         print(formatted)
 
 
@@ -184,6 +200,8 @@ def main():
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
     doctor_parser.add_argument("--skill-dirs", nargs="+", default=None,
                                help="Directories to scan")
+    doctor_parser.add_argument("--verbose", "-v", action="store_true",
+                               help="Show per-skill issues")
 
     # version command
     subparsers.add_parser("version", help="Show version")

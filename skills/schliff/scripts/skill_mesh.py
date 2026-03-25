@@ -24,8 +24,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Import scorer functions for tokenization and description extraction
-SCRIPT_DIR = Path(__file__).parent
-
 import score_skill as scorer
 from nlp import tokenize_meaningful
 from shared import extract_description
