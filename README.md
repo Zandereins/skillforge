@@ -257,6 +257,8 @@ skill-creator  -->  v1 SKILL.md  -->  schliff score  -->  /schliff:auto  -->  sh
 
 Anthropic's [skill-creator course](https://github.com/anthropics/courses/tree/master/claude-code/09-skill-creator) teaches you to build a v1 skill. Schliff grinds it to production quality.
 
+Works great with [autoresearch-style](https://github.com/karpathy/autoresearch) optimization loops — run `schliff score` first to fix structural issues for free, then let the LLM optimize outputs.
+
 ---
 
 ## Badge
