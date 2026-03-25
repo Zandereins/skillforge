@@ -38,7 +38,7 @@ skills/schliff/
 │   ├── test-integration.sh     # 99 integration tests
 │   └── test-self.sh            # 20 self-tests (dogfooding)
 ├── tests/
-│   ├── unit/                   # 427 unit tests (pytest)
+│   ├── unit/                   # 455 unit tests (pytest)
 │   └── proof/                  # 6 proof-of-work tests
 ├── hooks/
 │   └── session-injector.js     # Surfaces failures at session start

@@ -33,26 +33,10 @@ def _default_skill_dirs() -> list[str]:
 
 def _score_single_skill(skill_path: str) -> dict:
     """Score a single skill and return summary."""
-    skill_dir = Path(skill_path).parent
+    from shared import load_eval_suite, build_scores
 
-    # Load eval suite if available
-    eval_suite = None
-    eval_path = skill_dir / "eval-suite.json"
-    if eval_path.exists():
-        try:
-            eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    scores = {
-        "structure": scorer.score_structure(skill_path),
-        "triggers": scorer.score_triggers(skill_path, eval_suite),
-        "quality": scorer.score_quality(skill_path, eval_suite),
-        "edges": scorer.score_edges(skill_path, eval_suite),
-        "efficiency": scorer.score_efficiency(skill_path),
-        "composability": scorer.score_composability(skill_path),
-        "clarity": scorer.score_clarity(skill_path),
-    }
+    eval_suite = load_eval_suite(skill_path)
+    scores = build_scores(skill_path, eval_suite)
 
     composite = scorer.compute_composite(scores)
 

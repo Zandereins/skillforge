@@ -136,6 +136,36 @@ def load_eval_suite(skill_path: str) -> Optional[dict]:
     return None
 
 
+def build_scores(skill_path: str, eval_suite: Optional[dict] = None,
+                  include_runtime: bool = False) -> dict:
+    """Build the standard scoring dict for a skill.
+
+    Centralizes the dimension-scoring calls used by score, badge, and doctor.
+    """
+    # Lazy imports to avoid circular deps and keep CLI startup fast
+    from scoring import (
+        score_structure, score_triggers, score_efficiency,
+        score_composability, score_quality, score_edges,
+        score_clarity,
+    )
+
+    scores = {
+        "structure": score_structure(skill_path),
+        "triggers": score_triggers(skill_path, eval_suite),
+        "quality": score_quality(skill_path, eval_suite),
+        "edges": score_edges(skill_path, eval_suite),
+        "efficiency": score_efficiency(skill_path),
+        "composability": score_composability(skill_path),
+        "clarity": score_clarity(skill_path),
+    }
+
+    if include_runtime:
+        from scoring import score_runtime
+        scores["runtime"] = score_runtime(skill_path, eval_suite, enabled=False)
+
+    return scores
+
+
 def validate_regex_complexity(pattern: str, max_length: int = 500) -> tuple[bool, str]:
     """Reject regex patterns with catastrophic backtracking potential.
 

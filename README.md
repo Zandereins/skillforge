@@ -197,7 +197,7 @@ Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) 
 | **Anti-gaming** | None | 6 detection vectors |
 | **Memory** | Stateless | Cross-session episodic store |
 | **Dependencies** | External (ML frameworks) | Python 3.9+ stdlib only |
-| **Tests** | Minimal | 540+ |
+| **Tests** | Minimal | 500+ |
 
 ---
 

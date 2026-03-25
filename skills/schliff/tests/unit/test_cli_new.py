@@ -295,11 +295,12 @@ class TestClarityInjectionSuppression:
         custom = {"structure": 0.5, "triggers": 0.5}
         result = compute_composite(scores, custom_weights=custom)
         # clarity is in scores but custom_weights suppresses auto-injection
-        # clarity should NOT appear in measured dimensions
-        assert "clarity" not in result.get("unmeasured", []) or "clarity" in result.get("unmeasured", [])
-        # The key test: the score should reflect custom weights, not auto-injected clarity
-        assert isinstance(result["score"], float)
-        assert result["score"] >= 0
+        # Key test: score must be identical whether or not clarity is in the input scores
+        scores_without_clarity = {k: v for k, v in scores.items() if k != "clarity"}
+        result_without = compute_composite(scores_without_clarity, custom_weights=custom)
+        assert result["score"] == result_without["score"], (
+            f"Clarity leaked into composite: {result['score']} != {result_without['score']}"
+        )
 
     def test_no_custom_weights_injects_clarity(self):
         """Without custom_weights, clarity present in scores IS auto-injected."""
