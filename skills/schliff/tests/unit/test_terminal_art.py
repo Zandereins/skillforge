@@ -250,7 +250,7 @@ class TestFormatScoreDisplay:
             _make_scores(), _make_composite(), fix_count=14,
         )
         assert "14 deterministic fixes" in output
-        assert "schliff auto" in output
+        assert "/schliff:auto" in output
 
     def test_no_fix_line_when_zero(self, monkeypatch):
         monkeypatch.setenv("NO_COLOR", "1")

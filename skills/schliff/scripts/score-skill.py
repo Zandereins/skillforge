@@ -116,7 +116,7 @@ def main():
         },
         "warnings": composite_result["warnings"],
         "confidence_notes": composite_result.get("confidence_notes", {}),
-        "dimensions": {k: v["score"] for k, v in scores.items()},
+        "dimensions": {k: round(v["score"], 1) if isinstance(v["score"], float) else v["score"] for k, v in scores.items()},
         "trigger_precision": scores.get("triggers", {}).get("precision"),
         "trigger_recall": scores.get("triggers", {}).get("recall"),
         "issues": {k: v["issues"] for k, v in scores.items() if v["issues"]},
