@@ -8,7 +8,7 @@ schliff score path/to/SKILL.md
 ```
 
 <p align="center">
-  <img src="demo/schliff-demo.gif?v=6" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
+  <img src="https://raw.githubusercontent.com/Zandereins/schliff/main/demo/schliff-demo.gif?v=6" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
 </p>
 
 <p align="center">
@@ -82,7 +82,7 @@ Reproduce: `python benchmarks/anti-gaming/run.py`
 ### Score any skill (no Claude Code needed)
 
 ```bash
-pip install schliff
+pip install schliff          # or: pipx install schliff
 schliff score path/to/SKILL.md
 schliff score path/to/SKILL.md --json   # machine-readable
 schliff doctor                           # scan all installed skills
@@ -185,7 +185,7 @@ Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) 
 ---
 
 <details>
-<summary><b>Architecture</b> — How the scoring engine and improvement loop connect</summary>
+<summary><b>Architecture</b> — How the scoring engine and improvement loop connect (<a href="https://github.com/Zandereins/schliff">view diagram on GitHub</a>)</summary>
 
 The scorer is the ruler. Claude is the craftsman.
 
@@ -216,6 +216,8 @@ flowchart TB
         EMA -->|yes| DONE[Done]
     end
 ```
+
+*Note: Mermaid diagram renders on GitHub. On PyPI, view the [repository](https://github.com/Zandereins/schliff) for the visual.*
 
 60-70% of patches follow deterministic rules (frontmatter fixes, noise removal, TODO cleanup, hedging elimination). The LLM handles the remaining 30-40% — structural reorganization, example generation, edge case synthesis.
 </details>
