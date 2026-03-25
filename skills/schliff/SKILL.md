@@ -209,7 +209,7 @@ Parse `history/results.jsonl` between sessions. Compare keep rates to prioritize
 
 ## Lineage
 
-`/skill-creator` → v1 → `/schliff` → autonomous grinding → merge. Roll back via `git log --oneline history/`. For crashing skills: use `systematic-debugging` first, then Schliff.
+`/skill-creator` → v1 → `/schliff` → autonomous grinding → merge. Roll back via `git log --oneline history/`. For crashing skills: use `systematic-debugging` instead, then return to Schliff.
 
 ## Requirements
 
