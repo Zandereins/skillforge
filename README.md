@@ -8,7 +8,7 @@ schliff score path/to/SKILL.md
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Zandereins/schliff/main/demo/schliff-demo.gif?v=6" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
+  <img src="https://raw.githubusercontent.com/Zandereins/schliff/main/demo/schliff-demo.gif?v=7" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
 </p>
 
 <p align="center">
