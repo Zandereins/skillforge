@@ -8,7 +8,7 @@ schliff score path/to/SKILL.md
 ```
 
 <p align="center">
-  <img src="demo/schliff-demo.gif?v=5" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
+  <img src="demo/schliff-demo.gif?v=6" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
 </p>
 
 <p align="center">
@@ -43,19 +43,20 @@ Deterministic static analysis. No LLM required. Same input, same output, every t
 
 | Dimension | Weight | What it catches |
 |-----------|--------|-----------------|
-| Structure | 15% | Missing frontmatter, empty headers, no examples, dead content |
-| Trigger Accuracy | 20% | TF-IDF keyword overlap, negation boundaries, precision/recall |
-| Eval Coverage | 20% | Thin assertions, missing feature coverage, low coherence |
-| Edge Coverage | 15% | No edge cases defined, missing categories (invalid, scale, unicode) |
-| Token Efficiency | 10% | Hedging, filler words, repetition, low signal-to-noise |
-| Composability | 10% | Missing scope boundaries, no error behavior, no handoff points |
-| Clarity | 5% | Contradictions, vague references, ambiguous instructions |
+| structure | 15% | Missing frontmatter, empty headers, no examples, dead content |
+| triggers | 20% | TF-IDF keyword overlap, negation boundaries, precision/recall |
+| quality | 20% | Thin assertions, missing feature coverage, low coherence |
+| edges | 15% | No edge cases defined, missing categories (invalid, scale, unicode) |
+| efficiency | 10% | Hedging, filler words, repetition, low signal-to-noise |
+| composability | 10% | Missing scope boundaries, no error behavior, no handoff points |
+| clarity | 5% | Contradictions, vague references, ambiguous instructions |
+| runtime | 10% | *(opt-in)* Actual Claude behavior against eval assertions |
 
-Optional **runtime scoring** (`--runtime`) invokes Claude with test prompts and validates actual behavior. Structural scoring is the lint pass. Runtime is the quality gate.
+Weights are renormalized across measured dimensions (sum to 1.0). Without `--runtime`, the 7 structural dimensions carry 100% of the score.
 
 Grades: **S** (>=95) / **A** (>=85) / **B** (>=75) / **C** (>=65) / **D** (>=50) / **E** (>=35) / **F** (<35)
 
-Weights are overridable: `--weights "triggers=0.4,structure=0.3"`. Full methodology: [docs/SCORING.md](docs/SCORING.md)
+Override weights: `--weights "triggers=0.4,structure=0.3"`. Full methodology: [docs/SCORING.md](docs/SCORING.md)
 
 ---
 
@@ -105,21 +106,22 @@ git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 
 | Skill | Before | After | Iterations | Author |
 |-------|--------|-------|------------|--------|
-| schliff (self-score)* | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
+| demo skill (`demo/bad-skill/`) | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
 | agent-review-panel | 89.1 [A] | 90.8 [A] | 8 | [@wan-huiyan](https://github.com/wan-huiyan) |
 
-The demo skill (`demo/bad-skill/SKILL.md`) — a vague, hedging-filled deployment helper — goes from [D] to [S] in 18 autonomous iterations:
+The demo skill — a vague, hedging-filled deployment helper — goes from [D] to [S] in 18 autonomous iterations:
 
 ```
-  Structure         70 → 100     Frontmatter, examples, concrete commands
-  Efficiency        35 → 93      Hedging removed, information density up
-  Composability     30 → 90      Scope boundaries, error behavior, deps
-  Clarity           90 → 100     Vague references resolved
+  structure         70 → 100     Frontmatter, examples, concrete commands
+  triggers           0 → 100     Description keywords, negative boundaries
+  quality            0 → 95      Eval suite generated, assertions added
+  edges              0 → 100     Edge cases synthesized
+  efficiency        35 → 93      Hedging removed, information density up
+  composability     30 → 90      Scope boundaries, error behavior, deps
+  clarity           90 → 100     Vague references resolved
 ```
 
 Real-world skills vary. Complex skills plateau around [A] to [S] depending on eval suite coverage.
-
-*\* Peak score during demo improvement loop on the demo skill. Current live self-score is 99.0 (see above).*
 
 *Run `schliff score` on your skill and [add your result](https://github.com/Zandereins/schliff/edit/main/README.md).*
 
