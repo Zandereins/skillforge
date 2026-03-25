@@ -563,7 +563,7 @@
         },
         {
           "type": "pattern",
-          "value": "(kept|discarded|reverted)",
+          "value": "(?i)(keep|discard|revert)",
           "description": "Shows experiment outcomes"
         },
         {
@@ -625,6 +625,170 @@
           "value": "(?i)(priority|first|critical|start)",
           "description": "Provides prioritized recommendations"
         }
+      ]
+    },
+    {
+      "id": "tc-8",
+      "prompt": "My skill is stuck after 5 discards. Use parallel experimentation with worktree branches and keep the highest candidate.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "worktree", "description": "SKILL.md covers worktree parallel experimentation"},
+        {"type": "contains", "value": "branches", "description": "SKILL.md mentions branches for parallel runs"},
+        {"type": "contains", "value": "candidates", "description": "SKILL.md uses candidate terminology"},
+        {"type": "contains", "value": "highest", "description": "SKILL.md selects highest improvement"},
+        {"type": "contains", "value": "sequential", "description": "SKILL.md mentions sequential fallback"},
+        {"type": "contains", "value": "stuck", "description": "SKILL.md handles stuck state"},
+        {"type": "contains", "value": "separate", "description": "SKILL.md uses separate branches"},
+        {"type": "contains", "value": "Fallback", "description": "SKILL.md falls back to sequential when unavailable"}
+      ]
+    },
+    {
+      "id": "tc-9",
+      "prompt": "Use cross-session learning from history to prioritize strategies that succeeded before.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "session", "description": "SKILL.md covers cross-session learning"},
+        {"type": "contains", "value": "history", "description": "SKILL.md reads history for learning"},
+        {"type": "contains", "value": "results.jsonl", "description": "SKILL.md references results.jsonl file"},
+        {"type": "contains", "value": "success", "description": "SKILL.md tracks success rates"},
+        {"type": "contains", "value": "strategy", "description": "SKILL.md prioritizes strategies"},
+        {"type": "contains", "value": "parse", "description": "SKILL.md parses history data"},
+        {"type": "contains", "value": "record", "description": "SKILL.md records metrics per run"},
+        {"type": "contains", "value": "prioritize", "description": "SKILL.md prioritizes high-ROI strategies"},
+        {"type": "contains", "value": "rates", "description": "SKILL.md computes success rates"}
+      ]
+    },
+    {
+      "id": "tc-10",
+      "prompt": "Run discovery mode to analyze all dimensions and find the weakest scorer target.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "discovery", "description": "SKILL.md has discovery mode"},
+        {"type": "contains", "value": "dimension", "description": "SKILL.md analyzes dimensions"},
+        {"type": "contains", "value": "analyze", "description": "SKILL.md supports analysis"},
+        {"type": "contains", "value": "scorer", "description": "SKILL.md runs dimension scorers"},
+        {"type": "contains", "value": "script", "description": "SKILL.md references scoring scripts"},
+        {"type": "contains", "value": "target", "description": "SKILL.md identifies improvement targets"},
+        {"type": "contains", "value": "goal", "description": "SKILL.md suggests goals after analysis"},
+        {"type": "contains", "value": "mode", "description": "SKILL.md has discovery and auto modes"},
+        {"type": "contains", "value": "scorers", "description": "SKILL.md runs all 7 dimension scorers"},
+        {"type": "contains", "value": "high-ROI", "description": "SKILL.md prioritizes high-ROI strategies"}
+      ]
+    },
+    {
+      "id": "tc-11",
+      "prompt": "Define a custom metric using a bash command with json output and verify it.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "custom", "description": "SKILL.md supports custom metrics"},
+        {"type": "contains", "value": "metric", "description": "SKILL.md defines metric interface"},
+        {"type": "contains", "value": "json", "description": "SKILL.md supports JSON output"},
+        {"type": "contains", "value": "command", "description": "SKILL.md uses verify commands"},
+        {"type": "contains", "value": "verify", "description": "SKILL.md has verify interface"},
+        {"type": "contains", "value": "output", "description": "SKILL.md processes command output"},
+        {"type": "contains", "value": "execute", "description": "SKILL.md executes verify commands"},
+        {"type": "contains", "value": "bash", "description": "SKILL.md supports bash commands"}
+      ]
+    },
+    {
+      "id": "tc-12",
+      "prompt": "Harden my skill against malformed input, empty files, and missing context.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "edge", "description": "SKILL.md covers edge cases"},
+        {"type": "contains", "value": "malformed", "description": "SKILL.md tests malformed input"},
+        {"type": "contains", "value": "empty", "description": "SKILL.md handles empty files"},
+        {"type": "contains", "value": "input", "description": "SKILL.md tests input handling"},
+        {"type": "contains", "value": "file", "description": "SKILL.md processes skill files"},
+        {"type": "contains", "value": "missing", "description": "SKILL.md handles missing context"},
+        {"type": "contains", "value": "context", "description": "SKILL.md re-reads context before changes"},
+        {"type": "contains", "value": "case", "description": "SKILL.md defines edge case handling"},
+        {"type": "contains", "value": "none", "description": "SKILL.md handles none/missing eval suites"}
+      ]
+    },
+    {
+      "id": "tc-13",
+      "prompt": "Show the improvement loop scoring changes over time and check for regression.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "loop", "description": "SKILL.md runs improvement loop"},
+        {"type": "contains", "value": "scoring", "description": "SKILL.md tracks scoring progress"},
+        {"type": "contains", "value": "changes", "description": "SKILL.md tracks atomic changes"},
+        {"type": "contains", "value": "time", "description": "SKILL.md tracks time budgets"},
+        {"type": "contains", "value": "point", "description": "SKILL.md tracks point deltas"},
+        {"type": "contains", "value": "check", "description": "SKILL.md checks for regressions"},
+        {"type": "contains", "value": "current", "description": "SKILL.md shows current state"},
+        {"type": "contains", "value": "improve", "description": "SKILL.md drives improvements"},
+        {"type": "contains", "value": "once", "description": "SKILL.md runs verify once before loop"},
+        {"type": "contains", "value": "between", "description": "SKILL.md evolves eval suites between sessions"},
+        {"type": "contains", "value": "number", "description": "SKILL.md uses number for metric tracking"}
+      ]
+    },
+    {
+      "id": "tc-14",
+      "prompt": "Handle a multi-file skill with deep reference files in a directory, extract and move content.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "reference", "description": "SKILL.md handles reference files"},
+        {"type": "contains", "value": "extract", "description": "SKILL.md extracts content to references"},
+        {"type": "contains", "value": "content", "description": "SKILL.md manages skill content"},
+        {"type": "contains", "value": "directory", "description": "SKILL.md mentions directory structure"},
+        {"type": "contains", "value": "deep", "description": "SKILL.md handles deep content"},
+        {"type": "contains", "value": "move", "description": "SKILL.md moves sections to references"},
+        {"type": "contains", "value": "adjacent", "description": "SKILL.md checks adjacent skills"},
+        {"type": "contains", "value": "handoff", "description": "SKILL.md defines handoff points"},
+        {"type": "contains", "value": "references", "description": "SKILL.md manages reference file trees"}
+      ]
+    },
+    {
+      "id": "tc-15",
+      "prompt": "Run the test suite assertions on my deploy skill and show pass rate without manual steps.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "test", "description": "SKILL.md supports test suites"},
+        {"type": "contains", "value": "suite", "description": "SKILL.md uses eval suites"},
+        {"type": "contains", "value": "assertion", "description": "SKILL.md checks assertions"},
+        {"type": "contains", "value": "deploy", "description": "SKILL.md handles deploy skills"},
+        {"type": "contains", "value": "default", "description": "SKILL.md has default settings"},
+        {"type": "contains", "value": "user", "description": "SKILL.md interacts with user"},
+        {"type": "contains", "value": "pass", "description": "SKILL.md reports pass rate"},
+        {"type": "contains", "value": "without", "description": "SKILL.md works without manual input"},
+        {"type": "contains", "value": "assertions", "description": "SKILL.md validates assertions"},
+        {"type": "contains", "value": "path", "description": "SKILL.md requires skill path as input"}
+      ]
+    },
+    {
+      "id": "tc-16",
+      "prompt": "Generate an eval suite from seed examples with concrete pairs and initial coverage.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "seed", "description": "SKILL.md uses examples as seeds"},
+        {"type": "contains", "value": "examples", "description": "SKILL.md includes examples"},
+        {"type": "contains", "value": "concrete", "description": "SKILL.md suggests concrete pairs"},
+        {"type": "contains", "value": "pairs", "description": "SKILL.md creates before/after pairs"},
+        {"type": "contains", "value": "initial", "description": "SKILL.md establishes initial baseline"},
+        {"type": "contains", "value": "descriptive", "description": "SKILL.md requires descriptive commits"},
+        {"type": "contains", "value": "write", "description": "SKILL.md writes commit messages"},
+        {"type": "contains", "value": "says", "description": "SKILL.md handles when user says something vague"},
+        {"type": "contains", "value": "before", "description": "SKILL.md reads files before each change"}
+      ]
+    },
+    {
+      "id": "tc-17",
+      "prompt": "Show cost tracking and running time, then write a handoff for the next Claude session.",
+      "input_files": [],
+      "assertions": [
+        {"type": "contains", "value": "schliff", "description": "SKILL.md is the Schliff skill"},
+        {"type": "contains", "value": "running", "description": "SKILL.md tracks running experiments"},
+        {"type": "contains", "value": "claude", "description": "SKILL.md mentions Claude Code"},
+        {"type": "contains", "value": "grep", "description": "SKILL.md uses grep for output parsing"},
+        {"type": "contains", "value": "work", "description": "SKILL.md describes workflow"},
+        {"type": "contains", "value": "unavailable", "description": "SKILL.md handles unavailable resources"},
+        {"type": "contains", "value": "correct", "description": "SKILL.md ensures correct output"},
+        {"type": "contains", "value": "exists", "description": "SKILL.md checks if resources exist"},
+        {"type": "contains", "value": "return", "description": "SKILL.md returns structured error on failure"},
+        {"type": "contains", "value": "prevent", "description": "SKILL.md prevents contradictions and drift"},
+        {"type": "contains", "value": "next", "description": "SKILL.md supports handoff to next session"}
       ]
     }
   ],
