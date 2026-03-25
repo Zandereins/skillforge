@@ -23,7 +23,7 @@ from pathlib import Path
 from shared import VALID_DIMENSIONS, invalidate_cache as _shared_invalidate_cache
 from scoring import (
     score_structure, score_triggers, score_efficiency,
-    score_composability, score_coherence, score_quality,
+    score_composability, score_quality,
     score_edges, score_runtime, score_clarity,
     score_diff, explain_score_change, compute_composite,
 )
@@ -116,7 +116,7 @@ def main():
         },
         "warnings": composite_result["warnings"],
         "confidence_notes": composite_result.get("confidence_notes", {}),
-        "dimensions": {k: v["score"] for k, v in scores.items()},
+        "dimensions": {k: round(v["score"], 1) if isinstance(v["score"], float) else v["score"] for k, v in scores.items()},
         "trigger_precision": scores.get("triggers", {}).get("precision"),
         "trigger_recall": scores.get("triggers", {}).get("recall"),
         "issues": {k: v["issues"] for k, v in scores.items() if v["issues"]},

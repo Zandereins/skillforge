@@ -3,6 +3,38 @@
 All notable changes to Schliff are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [6.2.0] - 2026-03-25
+
+### Added
+- `schliff demo` command — score a built-in bad skill to see schliff in action instantly
+- `schliff badge <path>` command — generate copy-paste markdown badge for READMEs
+- Pre-commit hook support (`.pre-commit-hooks.yaml`) for automatic skill quality gates
+- Doctor: `--verbose` flag shows per-skill issues, `references/` extraction recommendation for large skills
+- Community case study: @wan-huiyan agent-review-panel (64→85.6, 75% token reduction, A/B validated)
+- 24 new tests for demo, badge, ReDoS fix, clarity injection, JSON rounding (455 total)
+- Show HN launch draft (`docs/specs/show-hn-draft.md`)
+
+### Fixed
+- Security: ReDoS in `_RE_ERROR_BEHAVIOR` — bounded `[\w\s]+` to `\w[\w ]{0,80}`
+- Security: OOM-safe eval-suite loading — `stat().st_size` check before `read_text()`
+- Security: symlink rejection on `references/` directory and files in `estimate_token_cost`
+- Scoring: `no_real_examples` silently suppressed when `code_block_pairs >= 6`
+- Scoring: clarity auto-injection with custom weights — custom weights now take full precedence
+- CLI: `schliff auto` reference corrected to `/schliff:auto` (Claude Code slash command)
+- CLI: JSON dimension scores rounded to 1 decimal (was outputting raw floats like 92.0501...)
+- CLI: badge URL encoding with `safe=""` (forward slash was not percent-encoded)
+- Pre-commit: `pass_filenames: true` with file filter (was `false`, causing argparse crash)
+- Removed unused `score_coherence` from public API exports
+- Removed dead `SCRIPT_DIR` assignments in doctor.py and skill_mesh.py
+- Fixed stale BUG DOCUMENTED comments in test_edge_cases.py
+
+### Changed
+- Quick Start: reordered to demo → doctor → score for better onboarding
+- README: GIF uses absolute GitHub raw URL (fixes broken image on PyPI)
+- README: Mermaid diagram section includes "view on GitHub" hint for PyPI
+- PyPI metadata: added Homepage, Documentation URLs, Environment::Console classifier
+- GitHub: topics reduced from 20 to 10, homepage URL set to PyPI
+
 ## [6.1.0] - 2026-03-24
 
 ### Added

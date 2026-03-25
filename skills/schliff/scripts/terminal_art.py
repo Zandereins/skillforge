@@ -282,7 +282,7 @@ def format_score_display(
     Args:
         scores: Per-dimension score dicts {dim: {"score": float, ...}}.
         composite: Result from compute_composite().
-        version: Version string (e.g. "6.1.0").
+        version: Version string (e.g. "6.2.0").
         contradictions: List of contradiction strings from clarity scorer.
         fix_count: Number of deterministic fixes available.
     """
@@ -345,7 +345,7 @@ def format_score_display(
     # Fix count
     if fix_count > 0:
         arrow = f"\x1b[36m\u2192{RESET}" if is_color_tty() else "\u2192"
-        lines.append(f"  {arrow} {fix_count} deterministic fixes available. Run `schliff auto` to apply.")
+        lines.append(f"  {arrow} {fix_count} deterministic fixes available. Run `/schliff:auto` in Claude Code to apply.")
 
     lines.append("")
     return "\n".join(lines)

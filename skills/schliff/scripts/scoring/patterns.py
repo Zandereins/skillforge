@@ -78,7 +78,7 @@ _RE_ALTERNATIVES = re.compile(
 )
 # New composability patterns (v6.0.1 — granular scoring)
 _RE_ERROR_BEHAVIOR = re.compile(
-    r"(?i)(on\s+error|error\s+handling|if\s+[\w\s]+\s+fails?|when\s+[\w\s]+\s+fails?|"
+    r"(?i)(on\s+error|error\s+handling|if\s+\w[\w ]{0,80}\s+fails?|when\s+\w[\w ]{0,80}\s+fails?|"
     r"graceful(?:ly)?\s+(?:handle|degrad\w+|fail)|recover(?:y|s)?\s+(?:from|when))"
 )
 _RE_IDEMPOTENCY = re.compile(

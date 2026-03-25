@@ -8,7 +8,7 @@ schliff score path/to/SKILL.md
 ```
 
 <p align="center">
-  <img src="demo/schliff-demo.gif?v=6" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
+  <img src="https://raw.githubusercontent.com/Zandereins/schliff/main/demo/schliff-demo.gif?v=6" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
 </p>
 
 <p align="center">
@@ -16,11 +16,11 @@ schliff score path/to/SKILL.md
   <a href="skills/schliff/scripts/score-skill.py"><img alt="Structural Score" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json"></a>
   <a href=".github/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
-  <a href="CHANGELOG.md"><img alt="v6.1.0" src="https://img.shields.io/badge/v6.1.0-F59E0B?label=version"></a>
+  <a href="CHANGELOG.md"><img alt="v6.2.0" src="https://img.shields.io/badge/v6.2.0-F59E0B?label=version"></a>
 </p>
 
 ```
-schliff v6.1.0
+schliff v6.2.0
 
   structure      ██████████  100/100  perfect
   triggers       ██████████  100/100  perfect
@@ -82,10 +82,11 @@ Reproduce: `python benchmarks/anti-gaming/run.py`
 ### Score any skill (no Claude Code needed)
 
 ```bash
-pip install schliff
-schliff score path/to/SKILL.md
+pip install schliff          # or: pipx install schliff
+schliff demo                            # see it in action instantly
+schliff doctor                           # scan YOUR installed skills — prepare for surprises
+schliff score path/to/SKILL.md          # score any specific skill
 schliff score path/to/SKILL.md --json   # machine-readable
-schliff doctor                           # scan all installed skills
 ```
 
 ### Autonomous improvement (requires Claude Code)
@@ -107,7 +108,7 @@ git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 | Skill | Before | After | Iterations | Author |
 |-------|--------|-------|------------|--------|
 | demo skill (`demo/bad-skill/`) | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
-| agent-review-panel | 89.1 [A] | 90.8 [A] | 8 | [@wan-huiyan](https://github.com/wan-huiyan) |
+| agent-review-panel | 64.0 [D] | 85.6 [A] | 3 rounds | [@wan-huiyan](https://github.com/wan-huiyan) |
 
 The demo skill — a vague, hedging-filled deployment helper — goes from [D] to [S] in 18 autonomous iterations:
 
@@ -125,15 +126,23 @@ Real-world skills vary. Complex skills plateau around [A] to [S] depending on ev
 
 *Run `schliff score` on your skill and [add your result](https://github.com/Zandereins/schliff/edit/main/README.md).*
 
+### Community
+
+> "It's become a core part of my skill development workflow!" — [@wan-huiyan](https://github.com/wan-huiyan)
+
+[@wan-huiyan](https://github.com/wan-huiyan) used schliff to improve [agent-review-panel](https://github.com/wan-huiyan/claude-client-proposal-slide) from 64 to 85.6 across three rounds. Along the way, SKILL.md went from 1,331 to 340 lines — a 75% token reduction via `references/` extraction. A/B testing on a 1,132-line document confirmed identical review quality with fewer tokens.
+
 ---
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
+| `schliff demo` | Score a built-in bad skill — see schliff in action instantly |
 | `schliff score <path>` | Score a SKILL.md (pip CLI, no Claude Code needed) |
-| `schliff verify <path>` | CI gate — exit 0/1, `--min-score`, `--regression` |
+| `schliff verify <path>` | CI gate — exit 0/1, `--min-score`, `--regression`, pre-commit hook |
 | `schliff doctor` | Scan all installed skills, show health grades |
+| `schliff badge <path>` | Generate copy-paste markdown badge |
 | `/schliff:auto` | Autonomous improvement loop with EMA-based stopping |
 | `/schliff:init <path>` | Bootstrap eval suite + baseline from any SKILL.md |
 | `/schliff:analyze` | One-shot gap analysis with ranked fix recommendations |
@@ -162,6 +171,20 @@ schliff verify path/to/SKILL.md --min-score 75 --regression
 
 ---
 
+## Pre-commit Hook
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/Zandereins/schliff
+    rev: v6.2.0
+    hooks:
+      - id: schliff-verify
+        args: ['--min-score', '75']
+```
+
+---
+
 ## How it differs from autoresearch
 
 Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) — but Schliff is a **linter**, not a research loop. You can run `schliff score` in CI without ever touching the improvement loop.
@@ -174,12 +197,12 @@ Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) 
 | **Anti-gaming** | None | 6 detection vectors |
 | **Memory** | Stateless | Cross-session episodic store |
 | **Dependencies** | External (ML frameworks) | Python 3.9+ stdlib only |
-| **Tests** | Minimal | 540+ |
+| **Tests** | Minimal | 500+ |
 
 ---
 
 <details>
-<summary><b>Architecture</b> — How the scoring engine and improvement loop connect</summary>
+<summary><b>Architecture</b> — How the scoring engine and improvement loop connect (<a href="https://github.com/Zandereins/schliff">view diagram on GitHub</a>)</summary>
 
 The scorer is the ruler. Claude is the craftsman.
 
@@ -211,6 +234,8 @@ flowchart TB
     end
 ```
 
+*Note: Mermaid diagram renders on GitHub. On PyPI, view the [repository](https://github.com/Zandereins/schliff) for the visual.*
+
 60-70% of patches follow deterministic rules (frontmatter fixes, noise removal, TODO cleanup, hedging elimination). The LLM handles the remaining 30-40% — structural reorganization, example generation, edge case synthesis.
 </details>
 
@@ -230,7 +255,7 @@ The trigger scorer uses TF-IDF heuristics. Skills whose domain vocabulary overla
 skill-creator  -->  v1 SKILL.md  -->  schliff score  -->  /schliff:auto  -->  ship
 ```
 
-[skill-creator](https://github.com/anthropics/courses/tree/master/claude-code/09-skill-creator) builds a v1 skill. Schliff grinds it to production quality.
+Anthropic's [skill-creator course](https://github.com/anthropics/courses/tree/master/claude-code/09-skill-creator) teaches you to build a v1 skill. Schliff grinds it to production quality.
 
 ---
 

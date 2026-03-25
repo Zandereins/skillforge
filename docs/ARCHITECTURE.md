@@ -29,7 +29,7 @@ skills/schliff/
 │   ├── skill_mesh.py           # Underscore alias
 │   ├── parallel_runner.py      # Underscore alias
 │   ├── verify.py               # CI gate — exit 0/1/2, --min-score, --regression
-│   ├── cli.py                  # pip CLI router (score, verify, doctor, version)
+│   ├── cli.py                  # pip CLI router (score, verify, doctor, badge, demo, version)
 │   ├── shared.py               # Shared utilities (read, extract, validate)
 │   ├── nlp.py                  # Tokenization, stemming, synonyms
 │   ├── run-eval.sh             # Binary assertion engine
@@ -38,7 +38,7 @@ skills/schliff/
 │   ├── test-integration.sh     # 99 integration tests
 │   └── test-self.sh            # 20 self-tests (dogfooding)
 ├── tests/
-│   ├── unit/                   # 427 unit tests (pytest)
+│   ├── unit/                   # 455 unit tests (pytest)
 │   └── proof/                  # 6 proof-of-work tests
 ├── hooks/
 │   └── session-injector.js     # Surfaces failures at session start

@@ -16,8 +16,6 @@ import argparse
 import json
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).parent
-
 import score_skill as scorer
 import skill_mesh
 
@@ -35,26 +33,10 @@ def _default_skill_dirs() -> list[str]:
 
 def _score_single_skill(skill_path: str) -> dict:
     """Score a single skill and return summary."""
-    skill_dir = Path(skill_path).parent
+    from shared import load_eval_suite, build_scores
 
-    # Load eval suite if available
-    eval_suite = None
-    eval_path = skill_dir / "eval-suite.json"
-    if eval_path.exists():
-        try:
-            eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    scores = {
-        "structure": scorer.score_structure(skill_path),
-        "triggers": scorer.score_triggers(skill_path, eval_suite),
-        "quality": scorer.score_quality(skill_path, eval_suite),
-        "edges": scorer.score_edges(skill_path, eval_suite),
-        "efficiency": scorer.score_efficiency(skill_path),
-        "composability": scorer.score_composability(skill_path),
-        "clarity": scorer.score_clarity(skill_path),
-    }
+    eval_suite = load_eval_suite(skill_path)
+    scores = build_scores(skill_path, eval_suite)
 
     composite = scorer.compute_composite(scores)
 
@@ -63,6 +45,15 @@ def _score_single_skill(skill_path: str) -> dict:
     for dim, data in scores.items():
         for issue in data.get("issues", []):
             all_issues.append(f"[{dim}] {issue}")
+
+    # Check for skill-specific recommendations
+    recommendations = []
+    structure_issues = scores.get("structure", {}).get("issues", [])
+    line_count = scores.get("structure", {}).get("details", {}).get("line_count", 0)
+    if "no_progressive_disclosure" in structure_issues and line_count > 300:
+        recommendations.append(
+            f"Consider extracting into references/ — {line_count} lines without progressive disclosure"
+        )
 
     # Determine recommended action
     score = composite["score"]
@@ -93,6 +84,7 @@ def _score_single_skill(skill_path: str) -> dict:
         "issues": all_issues,
         "action": action,
         "tokens": tokens,
+        "recommendations": recommendations,
     }
 
 
@@ -180,7 +172,7 @@ def run_doctor(
     }
 
 
-def format_doctor_report(report: dict) -> str:
+def format_doctor_report(report: dict, verbose: bool = False) -> str:
     """Format doctor report as human-readable text."""
     lines = []
     lines.append("=" * 70)
@@ -226,6 +218,10 @@ def format_doctor_report(report: dict) -> str:
 
         lines.append(f"  {name:<25s} {score:>5.0f} {grade:>6s} {dims:>6s} {tokens:>7d} {issues:>7d}  {action}")
 
+        if verbose and r.get("issues"):
+            for issue in r["issues"][:5]:  # Cap at 5 to avoid flooding
+                lines.append(f"    {'':25s}  └─ {issue}")
+
     lines.append("")
 
     # Mesh health
@@ -248,6 +244,15 @@ def format_doctor_report(report: dict) -> str:
             lines.append(f"    {'2' if no_eval else '1'}. Run /schliff:auto on {needs_work} low-scoring skills")
         lines.append("")
 
+    # Skill-specific recommendations
+    skills_with_recs = [r for r in results if r.get("recommendations")]
+    if skills_with_recs:
+        lines.append("  Skill-specific recommendations:")
+        for r in skills_with_recs:
+            for rec in r["recommendations"]:
+                lines.append(f"    - {r['name']}: {rec}")
+        lines.append("")
+
     lines.append("  NOTE: Scores are STRUCTURAL — they measure file organization,")
     lines.append("  not runtime effectiveness. Use --runtime for validated scoring.")
     lines.append("")
@@ -268,7 +273,7 @@ def main():
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        print(format_doctor_report(report))
+        print(format_doctor_report(report, verbose=args.verbose))
 
 
 if __name__ == "__main__":

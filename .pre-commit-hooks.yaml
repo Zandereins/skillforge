@@ -1,0 +1,8 @@
+- id: schliff-verify
+  name: schliff verify
+  description: Check SKILL.md quality scores meet minimum threshold
+  entry: schliff verify
+  language: python
+  types: [markdown]
+  files: 'SKILL\.md$'
+  args: ['--min-score', '75']

@@ -82,6 +82,7 @@ quality:        0.20  (20%)
 edges:          0.15  (15%)
 efficiency:     0.10  (10%)
 composability:  0.10  (10%)
+clarity:        0.05  ( 5%)  — auto-injected, opt-out via --no-clarity
 runtime:        0.10  (10%)  — only counted when enabled
 ```
 

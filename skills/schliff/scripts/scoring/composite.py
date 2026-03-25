@@ -92,7 +92,8 @@ def compute_composite(scores: dict, custom_weights: Optional[dict] = None) -> di
                     weights = {k: v / total_w for k, v in weights.items()}
 
     # If clarity is present, add it with weight 0.05 redistributed proportionally
-    if "clarity" in scores and "clarity" not in (custom_weights or {}):
+    # Skip auto-injection when user provided custom weights — custom weights take full precedence
+    if "clarity" in scores and not custom_weights:
         clarity_weight = 0.05
         scale = (1.0 - clarity_weight) / sum(weights.values())
         weights = {k: v * scale for k, v in weights.items()}

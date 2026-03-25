@@ -19,36 +19,35 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 
-def cmd_score(args):
+def _load_eval_suite_from_args(args: argparse.Namespace) -> "dict | None":
+    """Load eval suite from --eval-suite flag or auto-discover from skill dir."""
+    from pathlib import Path
+    from shared import load_eval_suite, MAX_SKILL_SIZE
+
+    if getattr(args, "eval_suite", None):
+        eval_path = Path(args.eval_suite)
+        if not eval_path.exists():
+            print(f"Error: eval-suite not found: {args.eval_suite}", file=sys.stderr)
+            sys.exit(1)
+        if eval_path.stat().st_size > MAX_SKILL_SIZE:
+            print(f"Error: eval-suite exceeds {MAX_SKILL_SIZE} byte size limit", file=sys.stderr)
+            sys.exit(1)
+        return json.loads(eval_path.read_text(encoding="utf-8"))
+    return load_eval_suite(args.skill_path)
+
+
+def cmd_score(args: argparse.Namespace) -> None:
     """Run the structural scorer on a single SKILL.md file."""
     from pathlib import Path
-    from scoring import (
-        score_structure, score_triggers, score_efficiency,
-        score_composability, score_quality, score_edges,
-        score_runtime, score_clarity, compute_composite,
-    )
-    from shared import load_eval_suite
+    from scoring import compute_composite
+    from shared import build_scores
 
     if not Path(args.skill_path).exists():
         print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
         sys.exit(1)
 
-    eval_suite = None
-    if args.eval_suite:
-        eval_suite = json.loads(Path(args.eval_suite).read_text(encoding="utf-8"))
-    else:
-        eval_suite = load_eval_suite(args.skill_path)
-
-    scores = {
-        "structure": score_structure(args.skill_path),
-        "triggers": score_triggers(args.skill_path, eval_suite),
-        "quality": score_quality(args.skill_path, eval_suite),
-        "edges": score_edges(args.skill_path, eval_suite),
-        "efficiency": score_efficiency(args.skill_path),
-        "composability": score_composability(args.skill_path),
-        "clarity": score_clarity(args.skill_path),
-        "runtime": score_runtime(args.skill_path, eval_suite, enabled=False),
-    }
+    eval_suite = _load_eval_suite_from_args(args)
+    scores = build_scores(args.skill_path, eval_suite, include_runtime=True)
 
     composite = compute_composite(scores)
 
@@ -56,7 +55,7 @@ def cmd_score(args):
         result = {
             "skill_path": args.skill_path,
             "composite_score": composite["score"],
-            "dimensions": {k: v["score"] for k, v in scores.items()},
+            "dimensions": {k: round(v["score"], 1) if isinstance(v["score"], float) else v["score"] for k, v in scores.items()},
             "warnings": composite["warnings"],
         }
         print(json.dumps(result, indent=2))
@@ -82,7 +81,7 @@ def cmd_score(args):
             from importlib.metadata import version
             ver = version("schliff")
         except Exception:
-            ver = "6.1.0"
+            ver = "6.2.0"
 
         output = format_score_display(
             scores=scores,
@@ -94,10 +93,10 @@ def cmd_score(args):
         print(output)
 
 
-def cmd_verify(args):
+def cmd_verify(args: argparse.Namespace) -> None:
     """CI gate — score a skill and exit with appropriate code."""
     from pathlib import Path
-    from shared import load_eval_suite
+    from shared import load_eval_suite, MAX_SKILL_SIZE
     import verify as verify_mod
 
     if not Path(args.skill_path).exists():
@@ -106,7 +105,14 @@ def cmd_verify(args):
 
     eval_suite = None
     if args.eval_suite:
-        eval_suite = json.loads(Path(args.eval_suite).read_text(encoding="utf-8"))
+        eval_path = Path(args.eval_suite)
+        if not eval_path.exists():
+            print(f"Error: eval-suite not found: {args.eval_suite}", file=sys.stderr)
+            sys.exit(2)
+        if eval_path.stat().st_size > MAX_SKILL_SIZE:
+            print(f"Error: eval-suite exceeds {MAX_SKILL_SIZE} byte size limit", file=sys.stderr)
+            sys.exit(2)
+        eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
     else:
         eval_suite = load_eval_suite(args.skill_path)
 
@@ -130,28 +136,101 @@ def cmd_verify(args):
     sys.exit(verdict["exit_code"])
 
 
-def cmd_doctor(args):
+def cmd_doctor(args: argparse.Namespace) -> None:
     """Run doctor scan across all installed skills."""
     import doctor as doctor_mod
 
+    verbose = getattr(args, "verbose", False)
     report = doctor_mod.run_doctor(
         skill_dirs=getattr(args, "skill_dirs", None),
+        verbose=verbose,
     )
 
     if getattr(args, "json", False):
         print(json.dumps(report, indent=2))
     else:
-        formatted = doctor_mod.format_doctor_report(report)
+        formatted = doctor_mod.format_doctor_report(report, verbose=verbose)
         print(formatted)
 
 
-def cmd_version(_args):
+def cmd_badge(args: argparse.Namespace) -> None:
+    """Generate a markdown badge for a skill's score."""
+    import urllib.parse
+    from pathlib import Path
+    from scoring import compute_composite
+    from shared import build_scores
+    from terminal_art import score_to_grade
+
+    if not Path(args.skill_path).exists():
+        print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
+        sys.exit(1)
+
+    eval_suite = _load_eval_suite_from_args(args)
+    scores = build_scores(args.skill_path, eval_suite)
+
+    composite = compute_composite(scores)
+    score = composite["score"]
+    grade = score_to_grade(score)
+
+    colors = {
+        "S": "brightgreen", "A": "green", "B": "yellowgreen",
+        "C": "yellow", "D": "orange", "E": "red", "F": "red",
+    }
+    color = colors.get(grade, "lightgrey")
+
+    label = urllib.parse.quote(f"{score:.0f}/100 [{grade}]", safe="")
+    badge_md = f"[![Schliff: {score:.0f} [{grade}]](https://img.shields.io/badge/Schliff-{label}-{color})](https://github.com/Zandereins/schliff)"
+
+    print(badge_md)
+
+
+def cmd_demo(_args: argparse.Namespace) -> None:
+    """Score a built-in demo skill to showcase schliff's output."""
+    import tempfile
+    from pathlib import Path
+
+    demo_content = '''---
+name: deploy-helper
+description: Helps with deployment stuff
+---
+
+# Deploy Helper
+
+This skill probably helps with deployment. You might want to use it when deploying things.
+
+## What It Does
+
+- Setting up deployment configurations
+- Running deploy commands
+- Checking if deployment worked
+
+## How To Use
+
+1. Tell Claude you want to deploy something
+2. It will try to help you
+3. Check if it worked
+'''
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        skill_path = str(Path(tmpdir) / "SKILL.md")
+        Path(skill_path).write_text(demo_content, encoding="utf-8")
+
+        # Reuse cmd_score logic
+        import argparse as _ap
+        fake_args = _ap.Namespace(skill_path=skill_path, json=False, eval_suite=None)
+        cmd_score(fake_args)
+
+    print("\n  This is a deliberately bad skill. Try schliff on your own skills!")
+    print("  Usage: schliff score path/to/SKILL.md\n")
+
+
+def cmd_version(_args: argparse.Namespace) -> None:
     """Print version string."""
     try:
         from importlib.metadata import version
         print(f"schliff {version('schliff')}")
     except Exception:
-        print("schliff 6.1.0")
+        print("schliff 6.2.0")
 
 
 def main():
@@ -184,6 +263,16 @@ def main():
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
     doctor_parser.add_argument("--skill-dirs", nargs="+", default=None,
                                help="Directories to scan")
+    doctor_parser.add_argument("--verbose", "-v", action="store_true",
+                               help="Show per-skill issues")
+
+    # badge command
+    badge_parser = subparsers.add_parser("badge", help="Generate markdown badge for a skill")
+    badge_parser.add_argument("skill_path", help="Path to SKILL.md")
+    badge_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
+
+    # demo command
+    subparsers.add_parser("demo", help="Score a built-in bad skill to see schliff in action")
 
     # version command
     subparsers.add_parser("version", help="Show version")
@@ -194,6 +283,8 @@ def main():
         "score": cmd_score,
         "verify": cmd_verify,
         "doctor": cmd_doctor,
+        "badge": cmd_badge,
+        "demo": cmd_demo,
         "version": cmd_version,
     }
 

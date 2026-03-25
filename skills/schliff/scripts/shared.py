@@ -106,8 +106,10 @@ def estimate_token_cost(skill_path: str) -> int:
 
     # Check for references/ directory alongside SKILL.md
     refs_dir = Path(skill_path).parent / "references"
-    if refs_dir.is_dir():
+    if refs_dir.is_dir() and not refs_dir.is_symlink():
         for ref_file in sorted(refs_dir.glob("*.md")):
+            if ref_file.is_symlink():
+                continue
             try:
                 ref_content = ref_file.read_text(encoding="utf-8", errors="replace")
                 if len(ref_content) <= MAX_SKILL_SIZE:
@@ -132,6 +134,36 @@ def load_eval_suite(skill_path: str) -> Optional[dict]:
         except json.JSONDecodeError as e:
             print(f"Warning: malformed eval-suite.json: {e}", file=sys.stderr)
     return None
+
+
+def build_scores(skill_path: str, eval_suite: Optional[dict] = None,
+                  include_runtime: bool = False) -> dict:
+    """Build the standard scoring dict for a skill.
+
+    Centralizes the dimension-scoring calls used by score, badge, and doctor.
+    """
+    # Lazy imports to avoid circular deps and keep CLI startup fast
+    from scoring import (
+        score_structure, score_triggers, score_efficiency,
+        score_composability, score_quality, score_edges,
+        score_clarity,
+    )
+
+    scores = {
+        "structure": score_structure(skill_path),
+        "triggers": score_triggers(skill_path, eval_suite),
+        "quality": score_quality(skill_path, eval_suite),
+        "edges": score_edges(skill_path, eval_suite),
+        "efficiency": score_efficiency(skill_path),
+        "composability": score_composability(skill_path),
+        "clarity": score_clarity(skill_path),
+    }
+
+    if include_runtime:
+        from scoring import score_runtime
+        scores["runtime"] = score_runtime(skill_path, eval_suite, enabled=False)
+
+    return scores
 
 
 def validate_regex_complexity(pattern: str, max_length: int = 500) -> tuple[bool, str]:

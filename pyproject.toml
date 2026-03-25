@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "schliff"
-version = "6.1.0"
+version = "6.2.0"
 description = "Deterministic skill linter and scoring engine for Claude Code. 7-dimension scoring, anti-gaming detection, autoresearch-style autonomous improvement."
 license = {text = "MIT"}
 requires-python = ">=3.9"
 readme = "README.md"
-keywords = ["claude-code", "skill-linter", "autoresearch", "scoring", "deterministic", "quality", "autonomous-improvement", "linting", "code-quality"]
+keywords = ["claude-code", "skill-linter", "autoresearch", "scoring", "deterministic", "quality", "autonomous-improvement", "linting", "code-quality", "cli", "static-analysis"]
 authors = [
     {name = "Franz Paul"}
 ]
@@ -26,13 +26,16 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
+    "Environment :: Console",
 ]
 
 [project.scripts]
 schliff = "skills.schliff.scripts.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/Zandereins/schliff"
 Repository = "https://github.com/Zandereins/schliff"
+Documentation = "https://github.com/Zandereins/schliff/blob/main/docs/SCORING.md"
 Issues = "https://github.com/Zandereins/schliff/issues"
 Changelog = "https://github.com/Zandereins/schliff/blob/main/CHANGELOG.md"
 
