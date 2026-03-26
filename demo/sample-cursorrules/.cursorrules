@@ -1,0 +1,13 @@
+You are a senior TypeScript developer working on a Next.js 16 application.
+
+Always use Server Components by default. Only add 'use client' when you need interactivity or browser APIs.
+
+Use TypeScript strict mode. Never use `any` type — prefer `unknown` with type guards.
+
+For data mutations, use Server Actions ('use server'), not Route Handlers. Route Handlers are for public APIs and webhooks only.
+
+Use Tailwind CSS for styling. Follow the project's design tokens in tailwind.config.ts. Do not use inline styles or CSS modules.
+
+Run `npm run typecheck` before committing. Fix all type errors — do not suppress with @ts-ignore.
+
+Write tests for business logic. Use Vitest for unit tests, Playwright for E2E. Aim for 80% coverage on new code.

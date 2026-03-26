@@ -1,10 +1,11 @@
 # Schliff
 
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's CLI for AI-assisted development. You extend it with "skills" — instruction files that teach Claude specific behaviors. **These skills degrade silently.** A skill that worked last month misfires today — triggers overlap, instructions contradict, edge cases slip through. You don't notice until production. Schliff catches that before your users do.
+AI coding agents use instruction files — SKILL.md, CLAUDE.md, .cursorrules, AGENTS.md — to define behavior. **These files degrade silently.** A skill that worked last month misfires today — triggers overlap, instructions contradict, edge cases slip through. You don't notice until production. Schliff catches that before your users do.
 
 ```bash
 pip install schliff
-schliff score path/to/SKILL.md
+schliff score path/to/SKILL.md          # or CLAUDE.md, .cursorrules, AGENTS.md
+schliff score --url https://github.com/user/repo/blob/main/SKILL.md
 ```
 
 <p align="center">
@@ -16,14 +17,14 @@ schliff score path/to/SKILL.md
   <a href="skills/schliff/scripts/score-skill.py"><img alt="Structural Score" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json"></a>
   <a href=".github/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
-  <a href="CHANGELOG.md"><img alt="v6.3.0" src="https://img.shields.io/badge/v6.3.0-F59E0B?label=version"></a>
+  <a href="CHANGELOG.md"><img alt="v7.0.0" src="https://img.shields.io/badge/v7.0.0-F59E0B?label=version"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="PyPI" src="https://img.shields.io/pypi/v/schliff?style=flat-square"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="Downloads" src="https://img.shields.io/pypi/dm/schliff?style=flat-square"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9+-blue?style=flat-square"></a>
 </p>
 
 ```
-schliff v6.3.0
+schliff v7.0.0
 
   structure      ██████████  100/100  perfect
   triggers       ██████████  100/100  perfect
@@ -36,7 +37,7 @@ schliff v6.3.0
   Structural Score  ████████████████████  99.0/100  [S]  (structural)
 ```
 
-Schliff scores itself with the same engine it applies to your skills — no exceptions, no special cases. **Zero dependencies** — Python 3.9+ stdlib only.
+Schliff scores itself with the same engine it applies to your skills — no exceptions, no special cases. **Zero dependencies** — Python 3.9+ stdlib only. Scores SKILL.md, CLAUDE.md, .cursorrules, and AGENTS.md out of the box.
 
 ---
 
@@ -53,6 +54,7 @@ Deterministic static analysis. No LLM required. Same input, same output, every t
 | efficiency | 10% | Hedging, filler words, repetition, low signal-to-noise |
 | composability | 10% | Missing scope boundaries, no error behavior, no handoff points |
 | clarity | 5% | Contradictions, vague references, ambiguous instructions |
+| security | 8% | *(opt-in)* Prompt injection, data exfiltration, obfuscation, dangerous commands |
 | runtime | 10% | *(opt-in)* Actual Claude behavior against eval assertions |
 
 Weights are renormalized across measured dimensions (sum to 1.0). Without `--runtime`, the 7 structural dimensions carry 100% of the score.
@@ -82,14 +84,17 @@ Reproduce: `python benchmarks/anti-gaming/run.py`
 
 ## Quick Start
 
-### Score any skill (no Claude Code needed)
+### Score any instruction file (no Claude Code needed)
 
 ```bash
 pip install schliff          # or: pipx install schliff
-schliff demo                            # see it in action instantly
-schliff doctor                           # scan YOUR installed skills — prepare for surprises
-schliff score path/to/SKILL.md          # score any specific skill
-schliff score path/to/SKILL.md --json   # machine-readable
+schliff demo                                        # see it in action instantly
+schliff score path/to/SKILL.md                      # score any skill file
+schliff score CLAUDE.md                             # works with any format
+schliff score --url https://github.com/.../SKILL.md # score remote files
+schliff compare skill-v1.md skill-v2.md             # side-by-side comparison
+schliff suggest path/to/SKILL.md                    # ranked fixes with impact
+schliff doctor                                       # scan all installed skills
 ```
 
 ### Autonomous improvement (requires Claude Code)
@@ -107,10 +112,11 @@ git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 ### Where Schliff fits
 
 ```
-skill-creator  -->  v1 SKILL.md  -->  schliff score  -->  /schliff:auto  -->  ship
+Write instruction file  -->  schliff score  -->  schliff suggest  -->  fix  -->  ship
+     (any format)            (8 dimensions)      (ranked fixes)
 ```
 
-Anthropic's [skill-creator course](https://github.com/anthropics/courses/tree/master/claude-code/09-skill-creator) teaches you to build a v1 skill. Schliff grinds it to production quality.
+Works with any AI coding agent: Claude Code (SKILL.md), Cursor (.cursorrules), GitHub Copilot (AGENTS.md), or project configs (CLAUDE.md). Schliff grinds instruction files to production quality.
 
 ---
 
@@ -161,7 +167,11 @@ Real-world skills vary. Complex skills plateau around [A] to [S] depending on ev
 | Command | Purpose |
 |---------|---------|
 | `schliff demo` | Score a built-in bad skill — see schliff in action instantly |
-| `schliff score <path>` | Score a SKILL.md file |
+| `schliff score <path>` | Score any instruction file (SKILL.md, CLAUDE.md, .cursorrules, AGENTS.md) |
+| `schliff score --url <url>` | Score a remote file from GitHub (HTTPS-only) |
+| `schliff score --security` | Include security dimension (injection, exfiltration, obfuscation) |
+| `schliff compare <a> <b>` | Side-by-side quality comparison with dimension deltas |
+| `schliff suggest <path>` | Ranked actionable fixes with estimated score impact |
 | `schliff diff <path>` | Show score delta vs. previous commit (or any `--ref`) |
 | `schliff verify <path>` | CI gate — exit 0/1, `--min-score`, `--regression`, pre-commit hook |
 | `schliff doctor` | Scan all installed skills, show health grades |
