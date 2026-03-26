@@ -2,13 +2,15 @@
 """Schliff CLI — The finishing cut for Claude Code skills.
 
 Usage:
-    schliff score <path>        Score a SKILL.md file
-    schliff diff <path>         Explain score changes between git commits
-    schliff verify <path>       CI gate — exit 0 if pass, 1 if fail
-    schliff doctor              Scan all installed skills
-    schliff badge <path>        Generate markdown badge
-    schliff demo                Score a built-in bad skill
-    schliff version             Show version
+    schliff score <path>             Score a SKILL.md file
+    schliff compare <file_a> <file_b> Compare two files side by side
+    schliff diff <path>              Explain score changes between git commits
+    schliff verify <path>            CI gate — exit 0 if pass, 1 if fail
+    schliff doctor                   Scan all installed skills
+    schliff badge <path>             Generate markdown badge
+    schliff suggest <path>           Suggest ranked fixes with estimated score impact
+    schliff demo                     Score a built-in bad skill
+    schliff version                  Show version
 """
 import sys
 import os
@@ -409,6 +411,194 @@ def cmd_diff(args: argparse.Namespace) -> None:
             print(f"  Diff: {net['signal']:+d} signal, {net['noise']:+d} noise, {net['lines']:+d} lines total\n")
 
 
+def cmd_compare(args: argparse.Namespace) -> None:
+    """Score two files and show a side-by-side dimension comparison."""
+    from pathlib import Path
+    from scoring import compute_composite
+    from shared import build_scores
+
+    path_a = args.file_a
+    path_b = args.file_b
+
+    if not Path(path_a).exists():
+        print(f"Error: file not found: {path_a}", file=sys.stderr)
+        sys.exit(1)
+    if not Path(path_b).exists():
+        print(f"Error: file not found: {path_b}", file=sys.stderr)
+        sys.exit(1)
+
+    eval_suite = _load_eval_suite_from_args(args)
+
+    scores_a = build_scores(path_a, eval_suite)
+    scores_b = build_scores(path_b, eval_suite)
+
+    composite_a = compute_composite(scores_a)
+    composite_b = compute_composite(scores_b)
+
+    score_a = composite_a["score"]
+    score_b = composite_b["score"]
+
+    # Collect dimension names present in both scores
+    dims = [k for k in scores_a if isinstance(scores_a[k], dict) and "score" in scores_a[k]]
+
+    # Per-dimension deltas: B - A
+    deltas = {}
+    for dim in dims:
+        val_a = scores_a[dim]["score"]
+        val_b = scores_b.get(dim, {}).get("score", 0.0)
+        deltas[dim] = round(val_b - val_a, 1)
+
+    # Biggest absolute gap
+    if deltas:
+        biggest_dim = max(deltas, key=lambda d: abs(deltas[d]))
+        biggest_delta = deltas[biggest_dim]
+    else:
+        biggest_dim = ""
+        biggest_delta = 0.0
+
+    if getattr(args, "json", False):
+        result = {
+            "file_a": {
+                "path": path_a,
+                "composite": round(score_a, 1),
+                "dimensions": {k: round(scores_a[k]["score"], 1) for k in dims},
+            },
+            "file_b": {
+                "path": path_b,
+                "composite": round(score_b, 1),
+                "dimensions": {k: round(scores_b.get(k, {}).get("score", 0.0), 1) for k in dims},
+            },
+            "deltas": deltas,
+            "biggest_gap": {"dimension": biggest_dim, "delta": biggest_delta},
+        }
+        print(json.dumps(result, indent=2))
+        return
+
+    from terminal_art import score_to_grade
+
+    grade_a = score_to_grade(score_a)
+    grade_b = score_to_grade(score_b)
+
+    print()
+    print("  schliff compare")
+    print()
+    print(f"  File A: {path_a}  [{grade_a}] {score_a:.1f}")
+    print(f"  File B: {path_b}  [{grade_b}] {score_b:.1f}")
+    print()
+
+    # Column header + separator
+    header = f"  {'Dimension':<16}{'A':>8}{'B':>8}{'Delta':>10}"
+    separator = "  " + "─" * 41
+    print(header)
+    print(separator)
+
+    for dim in dims:
+        val_a = scores_a[dim]["score"]
+        val_b = scores_b.get(dim, {}).get("score", 0.0)
+        delta = deltas[dim]
+        delta_str = f"{delta:+.1f}"
+        marker = "  ← biggest gap" if dim == biggest_dim else ""
+        print(f"  {dim:<16}{val_a:>8.1f}{val_b:>8.1f}{delta_str:>10}{marker}")
+
+    print(separator)
+
+    composite_delta = round(score_b - score_a, 1)
+    composite_delta_str = f"{composite_delta:+.1f}"
+    print(f"  {'Composite':<16}{score_a:>8.1f}{score_b:>8.1f}{composite_delta_str:>10}")
+    print()
+
+    if biggest_dim:
+        direction = "B" if biggest_delta > 0 else "A"
+        dim_label = biggest_dim
+        print(f"  Biggest gap: {dim_label} ({biggest_delta:+.1f}) — {direction} has stronger {dim_label} coverage")
+    print()
+
+
+def cmd_suggest(args: argparse.Namespace) -> None:
+    """Suggest ranked fixes with estimated score impact."""
+    from pathlib import Path
+    from scoring import compute_composite
+    from shared import build_scores
+    from terminal_art import score_to_grade
+    import text_gradient
+
+    if not Path(args.skill_path).exists():
+        print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
+        sys.exit(1)
+
+    eval_suite = _load_eval_suite_from_args(args)
+    top_n = args.top
+
+    # Compute current score
+    scores = build_scores(args.skill_path, eval_suite, include_runtime=True)
+    composite = compute_composite(scores)
+    current_score = composite["score"]
+    current_grade = score_to_grade(current_score)
+
+    # Get all ranked gradients (include clarity for full picture)
+    try:
+        gradients = text_gradient.compute_gradients(
+            args.skill_path, eval_suite, include_clarity=True,
+        )
+    except Exception as exc:
+        print(f"Error: failed to compute gradients: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    top_gradients = gradients[:top_n]
+
+    # Estimated score after applying all top fixes
+    total_delta = sum(g["delta"] for g in top_gradients)
+    estimated_score = min(100.0, current_score + total_delta)
+    estimated_grade = score_to_grade(estimated_score)
+
+    if getattr(args, "json", False):
+        result = {
+            "skill_path": args.skill_path,
+            "current_score": round(current_score, 1),
+            "current_grade": current_grade,
+            "estimated_score": round(estimated_score, 1),
+            "estimated_grade": estimated_grade,
+            "suggestions": [
+                {
+                    "rank": i + 1,
+                    "delta": g["delta"],
+                    "delta_display": g.get("delta_display", f"+{g['delta']:.1f}"),
+                    "dimension": g["dimension"],
+                    "instruction": g["instruction"],
+                    "confidence": g.get("confidence", "medium"),
+                }
+                for i, g in enumerate(top_gradients)
+            ],
+        }
+        print(json.dumps(result, indent=2))
+        return
+
+    print()
+    print(f"  schliff suggest  {args.skill_path}")
+    print()
+    print("  TOP FIXES (estimated impact):")
+
+    for i, g in enumerate(top_gradients, 1):
+        delta_val = g["delta"]
+        delta_display = g.get("delta_display", None)
+        if delta_display:
+            # Range like "~2.0-5.0" — show midpoint with tilde
+            delta_label = f"~{delta_val:.0f}"
+        else:
+            delta_label = f"+{delta_val:.0f}"
+        print(f"  {i:2d}. [{delta_label:>4}] {g['instruction']}")
+
+    print()
+    total_delta_display = f"~{total_delta:.1f}" if any(
+        g.get("delta_display") for g in top_gradients
+    ) else f"+{total_delta:.1f}"
+    print(
+        f"  Current: {current_score:.1f} [{current_grade}]"
+        f"  →  Estimated after fixes: ~{estimated_score:.1f} [{estimated_grade}]"
+    )
+    print()
+
+
 def cmd_version(_args: argparse.Namespace) -> None:
     """Print version string."""
     try:
@@ -476,6 +666,20 @@ def main():
     diff_parser.add_argument("--json", action="store_true", help="JSON output")
     diff_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
 
+    # compare command
+    compare_parser = subparsers.add_parser("compare", help="Compare two files side by side")
+    compare_parser.add_argument("file_a", help="First file to compare")
+    compare_parser.add_argument("file_b", help="Second file to compare")
+    compare_parser.add_argument("--json", action="store_true", help="JSON output")
+    compare_parser.add_argument("--eval-suite", help="Path to eval-suite.json (applied to both)")
+
+    # suggest command
+    suggest_parser = subparsers.add_parser("suggest", help="Suggest ranked fixes with estimated impact")
+    suggest_parser.add_argument("skill_path", help="Path to SKILL.md")
+    suggest_parser.add_argument("--json", action="store_true", help="JSON output")
+    suggest_parser.add_argument("--top", type=int, default=5, help="Number of suggestions (default: 5)")
+    suggest_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
+
     # demo command
     subparsers.add_parser("demo", help="Score a built-in bad skill to see schliff in action")
 
@@ -486,10 +690,12 @@ def main():
 
     commands = {
         "score": cmd_score,
+        "compare": cmd_compare,
         "diff": cmd_diff,
         "verify": cmd_verify,
         "doctor": cmd_doctor,
         "badge": cmd_badge,
+        "suggest": cmd_suggest,
         "demo": cmd_demo,
         "version": cmd_version,
     }
