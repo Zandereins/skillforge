@@ -3,6 +3,32 @@
 All notable changes to Schliff are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [7.0.0] - 2026-03-26
+
+### Added
+- **Multi-format support**: Score CLAUDE.md, .cursorrules, AGENTS.md alongside SKILL.md
+  - Auto-detection from filename, `--format` override flag
+  - Content normalization (synthetic frontmatter for non-SKILL.md formats)
+  - Zero scorer changes — all formats normalized to SKILL.md shape before scoring
+- **Security scoring dimension**: 10 regex patterns across 6 categories (injection, exfiltration, dangerous commands, obfuscation, overpermission, missing boundaries)
+  - Deductive scoring (100 minus penalties), graduated composite cap
+  - False-positive mitigation: code-block exclusion, meta-discourse detection (90% reduction), negation-aware matching
+  - Opt-in via `--security` flag
+- **`schliff compare`**: Side-by-side quality comparison of two skill files with dimension deltas
+- **`schliff suggest`**: Ranked actionable fixes with estimated score impact
+- **`schliff score --url`**: Score remote skill files from GitHub URLs (HTTPS-only, host allowlist, SSRF protection)
+- **Web Playground**: Browser-based scorer at schliff.dev/play (serverless Python, shareable URLs)
+- **GitHub Action**: Published to Marketplace with PR comments, grade output, branch protection support
+- 52 new tests (540 → 592 total), 4 rounds × 6 agents security review per feature branch
+
+### Security
+- SSRF redirect protection (`_SafeRedirectHandler`)
+- YAML injection prevention in content normalization
+- Path traversal guard in playground API
+- Shell injection prevention in action
+- Content-Length malformed header guard
+- JSONDecodeError handling on all JSON parse paths
+
 ## [6.3.0] - 2026-03-26
 
 ### Added

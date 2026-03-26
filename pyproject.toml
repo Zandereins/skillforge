@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "schliff"
-version = "6.3.0"
-description = "Deterministic skill linter and scoring engine for Claude Code. 7-dimension scoring, anti-gaming detection, autoresearch-style autonomous improvement."
+version = "7.0.0"
+description = "Deterministic quality scorer for AI agent instruction files. Multi-format (SKILL.md, CLAUDE.md, .cursorrules, AGENTS.md), 8-dimension scoring with security, anti-gaming detection, zero dependencies."
 license = {text = "MIT"}
 requires-python = ">=3.9"
 readme = "README.md"

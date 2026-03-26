@@ -1,3 +1,7 @@
+# Internal drafts and marketing (not for public repo)
+docs/specs/show-hn-draft.md
+demo/twitter/
+
 # Schliff working files (generated during runs, not committed)
 schliff-results.tsv
 schliff-eval-results.json
