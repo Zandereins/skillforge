@@ -32,7 +32,7 @@ body:
     attributes:
       label: Schliff version
       description: Output of `schliff version`
-      placeholder: "schliff 6.2.0"
+      placeholder: "schliff 6.3.0"
     validations:
       required: true
 

@@ -156,7 +156,7 @@ def score_efficiency(skill_path: str) -> dict:
         issues.append(f"repeated_lines:{repeated_lines}")
 
     return {
-        "score": min(100, max(0, score)),
+        "score": int(min(100, max(0, score))),
         "issues": issues,
         "details": {
             "total_words": total_words,

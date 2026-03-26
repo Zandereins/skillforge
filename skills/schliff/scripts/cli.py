@@ -3,8 +3,11 @@
 
 Usage:
     schliff score <path>        Score a SKILL.md file
+    schliff diff <path>         Explain score changes between git commits
     schliff verify <path>       CI gate — exit 0 if pass, 1 if fail
     schliff doctor              Scan all installed skills
+    schliff badge <path>        Generate markdown badge
+    schliff demo                Score a built-in bad skill
     schliff version             Show version
 """
 import sys
@@ -81,7 +84,7 @@ def cmd_score(args: argparse.Namespace) -> None:
             from importlib.metadata import version
             ver = version("schliff")
         except Exception:
-            ver = "6.2.0"
+            ver = "6.3.0"
 
         output = format_score_display(
             scores=scores,
@@ -224,19 +227,144 @@ This skill probably helps with deployment. You might want to use it when deployi
     print("  Usage: schliff score path/to/SKILL.md\n")
 
 
+def cmd_diff(args: argparse.Namespace) -> None:
+    """Explain score changes between git commits."""
+    import re
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    from scoring import compute_composite
+    from scoring.diff import score_diff, explain_score_change
+    from shared import build_scores, MAX_SKILL_SIZE
+
+    skill_path = args.skill_path
+    if not Path(skill_path).exists():
+        print(f"Error: file not found: {skill_path}", file=sys.stderr)
+        sys.exit(1)
+
+    ref = args.ref
+
+    # Validate ref to prevent git flag injection
+    if ref.startswith("-") or not re.match(r'^[a-zA-Z0-9_.~^@/\-]+$', ref):
+        print(f"Error: invalid git reference: {ref}", file=sys.stderr)
+        sys.exit(1)
+
+    # Score current version
+    eval_suite = _load_eval_suite_from_args(args)
+    new_scores = build_scores(skill_path, eval_suite)
+    new_composite = compute_composite(new_scores)
+
+    # Reconstruct old version via git show
+    try:
+        # Get the path relative to git root
+        git_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if git_root.returncode != 0:
+            print("Error: not a git repository", file=sys.stderr)
+            sys.exit(1)
+
+        abs_skill = str(Path(skill_path).resolve())
+        root = git_root.stdout.strip()
+
+        # Ensure skill path is inside the git repository
+        if not abs_skill.startswith(root + os.sep):
+            print("Error: skill path must be inside the git repository", file=sys.stderr)
+            sys.exit(1)
+
+        rel_path = os.path.relpath(abs_skill, root)
+
+        old_content = subprocess.run(
+            ["git", "show", f"{ref}:{rel_path}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if old_content.returncode != 0:
+            print(f"Error: cannot read {rel_path} at ref '{ref}' — file may not exist in that commit", file=sys.stderr)
+            sys.exit(1)
+
+        # Guard against oversized content from git history
+        if len(old_content.stdout) > MAX_SKILL_SIZE:
+            print(f"Error: file at ref '{ref}' exceeds {MAX_SKILL_SIZE} byte size limit", file=sys.stderr)
+            sys.exit(1)
+    except FileNotFoundError:
+        print("Error: git not available", file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print("Error: git command timed out", file=sys.stderr)
+        sys.exit(1)
+
+    # Score old version in a temp file
+    with tempfile.TemporaryDirectory() as tmpdir:
+        old_path = str(Path(tmpdir) / "SKILL.md")
+        Path(old_path).write_text(old_content.stdout, encoding="utf-8")
+        old_scores = build_scores(old_path, eval_suite)
+        old_composite = compute_composite(old_scores)
+
+    # Diff analysis (signal/noise classification) — use resolved path
+    diff_analysis = score_diff(abs_skill, ref)
+
+    # Build per-dimension deltas
+    old_flat = {k: v["score"] for k, v in old_scores.items() if isinstance(v, dict)}
+    new_flat = {k: v["score"] for k, v in new_scores.items() if isinstance(v, dict)}
+    explanations = explain_score_change(old_flat, new_flat, diff_analysis)
+
+    if getattr(args, "json", False):
+        result = {
+            "skill_path": skill_path,
+            "ref": ref,
+            "old_composite": old_composite["score"],
+            "new_composite": new_composite["score"],
+            "composite_delta": round(new_composite["score"] - old_composite["score"], 1),
+            "dimensions": explanations,
+        }
+        if diff_analysis.get("available"):
+            result["diff_summary"] = diff_analysis["net_change"]
+        print(json.dumps(result, indent=2))
+    else:
+        from terminal_art import score_to_grade
+
+        old_score = old_composite["score"]
+        new_score = new_composite["score"]
+        delta = new_score - old_score
+
+        old_grade = score_to_grade(old_score)
+        new_grade = score_to_grade(new_score)
+
+        print(f"\n  schliff diff  {ref} → current\n")
+        print(f"  Composite: {old_score:.1f} [{old_grade}] → {new_score:.1f} [{new_grade}]  ({delta:+.1f})\n")
+
+        if explanations:
+            for exp in explanations:
+                arrow = "+" if exp["delta"] > 0 else ""
+                print(f"  {exp['dimension']:16s}  {exp['old']:6.1f} → {exp['new']:6.1f}  ({arrow}{exp['delta']:.1f})")
+            print()
+        else:
+            print("  No significant dimension changes.\n")
+
+        if diff_analysis.get("available"):
+            net = diff_analysis["net_change"]
+            print(f"  Diff: {net['signal']:+d} signal, {net['noise']:+d} noise, {net['lines']:+d} lines total\n")
+
+
 def cmd_version(_args: argparse.Namespace) -> None:
     """Print version string."""
     try:
         from importlib.metadata import version
         print(f"schliff {version('schliff')}")
     except Exception:
-        print("schliff 6.2.0")
+        print("schliff 6.3.0")
 
 
 def main():
     parser = argparse.ArgumentParser(
         prog="schliff",
         description="The finishing cut for Claude Code skills",
+        epilog="Quick start:\n"
+               "  schliff demo              See it in action instantly\n"
+               "  schliff score SKILL.md    Score a skill\n"
+               "  schliff doctor            Scan all installed skills",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -271,6 +399,14 @@ def main():
     badge_parser.add_argument("skill_path", help="Path to SKILL.md")
     badge_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
 
+    # diff command
+    diff_parser = subparsers.add_parser("diff", help="Explain score changes between git commits")
+    diff_parser.add_argument("skill_path", help="Path to SKILL.md")
+    diff_parser.add_argument("--ref", default="HEAD~1",
+                              help="Git ref to compare against (default: HEAD~1)")
+    diff_parser.add_argument("--json", action="store_true", help="JSON output")
+    diff_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
+
     # demo command
     subparsers.add_parser("demo", help="Score a built-in bad skill to see schliff in action")
 
@@ -281,6 +417,7 @@ def main():
 
     commands = {
         "score": cmd_score,
+        "diff": cmd_diff,
         "verify": cmd_verify,
         "doctor": cmd_doctor,
         "badge": cmd_badge,

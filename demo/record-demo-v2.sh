@@ -1,5 +1,5 @@
 #!/bin/bash
-# Demo recording script for schliff v6.2.0
+# Demo recording script for schliff v6.3.0
 set -e
 cd "$(dirname "$0")/.."
 

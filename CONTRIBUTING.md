@@ -48,7 +48,7 @@ skills/schliff/
 make test          # 99 integration tests
 make test-self     # 20 self-tests (Schliff scores itself)
 make test-proof    # 6 proof tests (demonstrates real improvement)
-make test-all      # All of the above + 455 unit tests (pytest)
+make test-all      # All of the above + 540 unit tests (pytest)
 make score         # Score Schliff's own SKILL.md (expect >= 90)
 ```
 

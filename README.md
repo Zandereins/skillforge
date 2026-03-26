@@ -1,6 +1,6 @@
 # Schliff
 
-**Claude Code skills degrade silently.** A skill that worked last month misfires today — triggers overlap, instructions contradict, edge cases slip through. You don't notice until production. Schliff catches that before your users do.
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) is Anthropic's CLI for AI-assisted development. You extend it with "skills" — instruction files that teach Claude specific behaviors. **These skills degrade silently.** A skill that worked last month misfires today — triggers overlap, instructions contradict, edge cases slip through. You don't notice until production. Schliff catches that before your users do.
 
 ```bash
 pip install schliff
@@ -8,7 +8,7 @@ schliff score path/to/SKILL.md
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Zandereins/schliff/main/demo/schliff-demo.gif?v=7" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
+  <img src="https://raw.githubusercontent.com/Zandereins/schliff/main/demo/schliff-demo.gif?v=8" alt="schliff score: bad skill [D] vs production skill [S]" width="600">
 </p>
 
 <p align="center">
@@ -16,14 +16,14 @@ schliff score path/to/SKILL.md
   <a href="skills/schliff/scripts/score-skill.py"><img alt="Structural Score" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json"></a>
   <a href=".github/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
-  <a href="CHANGELOG.md"><img alt="v6.2.0" src="https://img.shields.io/badge/v6.2.0-F59E0B?label=version"></a>
+  <a href="CHANGELOG.md"><img alt="v6.3.0" src="https://img.shields.io/badge/v6.3.0-F59E0B?label=version"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="PyPI" src="https://img.shields.io/pypi/v/schliff?style=flat-square"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="Downloads" src="https://img.shields.io/pypi/dm/schliff?style=flat-square"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9+-blue?style=flat-square"></a>
 </p>
 
 ```
-schliff v6.2.0
+schliff v6.3.0
 
   structure      ██████████  100/100  perfect
   triggers       ██████████  100/100  perfect
@@ -36,7 +36,7 @@ schliff v6.2.0
   Structural Score  ████████████████████  99.0/100  [S]  (structural)
 ```
 
-Schliff scores itself at 99.0/100 [S] structural. Same engine, no exceptions. **Zero dependencies** — Python 3.9+ stdlib only.
+Schliff scores itself with the same engine it applies to your skills — no exceptions, no special cases. **Zero dependencies** — Python 3.9+ stdlib only.
 
 ---
 
@@ -47,7 +47,7 @@ Deterministic static analysis. No LLM required. Same input, same output, every t
 | Dimension | Weight | What it catches |
 |-----------|--------|-----------------|
 | structure | 15% | Missing frontmatter, empty headers, no examples, dead content |
-| triggers | 20% | TF-IDF keyword overlap, negation boundaries, precision/recall |
+| triggers | 20% | Eval-suite trigger accuracy, false positives, missed activations |
 | quality | 20% | Thin assertions, missing feature coverage, low coherence |
 | edges | 15% | No edge cases defined, missing categories (invalid, scale, unicode) |
 | efficiency | 10% | Hedging, filler words, repetition, low signal-to-noise |
@@ -59,13 +59,13 @@ Weights are renormalized across measured dimensions (sum to 1.0). Without `--run
 
 Grades: **S** (>=95) / **A** (>=85) / **B** (>=75) / **C** (>=65) / **D** (>=50) / **E** (>=35) / **F** (<35)
 
-Override weights: `--weights "triggers=0.4,structure=0.3"`. Full methodology: [docs/SCORING.md](docs/SCORING.md)
+Full methodology and weight rationale: [docs/SCORING.md](docs/SCORING.md)
 
 ---
 
 ## Anti-Gaming
 
-Schliff detects score inflation. 6/6 gaming attempts caught in the [benchmark suite](benchmarks/anti-gaming/).
+Schliff detects score inflation. The [benchmark suite](benchmarks/anti-gaming/) tests 6 common gaming patterns — all caught:
 
 | Gaming attempt | How Schliff catches it |
 |----------------|----------------------|
@@ -104,14 +104,22 @@ git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 
 **Prerequisites:** Python 3.9+, Bash, Git, jq
 
+### Where Schliff fits
+
+```
+skill-creator  -->  v1 SKILL.md  -->  schliff score  -->  /schliff:auto  -->  ship
+```
+
+Anthropic's [skill-creator course](https://github.com/anthropics/courses/tree/master/claude-code/09-skill-creator) teaches you to build a v1 skill. Schliff grinds it to production quality.
+
 ---
 
 ## Results
 
 | Skill | Before | After | Iterations | Author |
 |-------|--------|-------|------------|--------|
-| demo skill (`demo/bad-skill/`) | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
 | agent-review-panel | 64.0 [D] | 85.6 [A] | 3 rounds | [@wan-huiyan](https://github.com/wan-huiyan) |
+| demo skill (`demo/bad-skill/`) | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
 
 The demo skill — a vague, hedging-filled deployment helper — goes from [D] to [S] in 18 autonomous iterations:
 
@@ -144,13 +152,21 @@ Real-world skills vary. Complex skills plateau around [A] to [S] depending on ev
 
 ## Commands
 
+### CLI (standalone — `pip install schliff`)
+
 | Command | Purpose |
 |---------|---------|
 | `schliff demo` | Score a built-in bad skill — see schliff in action instantly |
-| `schliff score <path>` | Score a SKILL.md (pip CLI, no Claude Code needed) |
+| `schliff score <path>` | Score a SKILL.md file |
+| `schliff diff <path>` | Show score delta vs. previous commit (or any `--ref`) |
 | `schliff verify <path>` | CI gate — exit 0/1, `--min-score`, `--regression`, pre-commit hook |
 | `schliff doctor` | Scan all installed skills, show health grades |
 | `schliff badge <path>` | Generate copy-paste markdown badge |
+
+### Claude Code skills (require integration)
+
+| Command | Purpose |
+|---------|---------|
 | `/schliff:auto` | Autonomous improvement loop with EMA-based stopping |
 | `/schliff:init <path>` | Bootstrap eval suite + baseline from any SKILL.md |
 | `/schliff:analyze` | One-shot gap analysis with ranked fix recommendations |
@@ -185,7 +201,7 @@ schliff verify path/to/SKILL.md --min-score 75 --regression
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/Zandereins/schliff
-    rev: v6.2.0
+    rev: v6.3.0
     hooks:
       - id: schliff-verify
         args: ['--min-score', '75']
@@ -205,7 +221,7 @@ Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) 
 | **Anti-gaming** | None | 6 detection vectors |
 | **Memory** | Stateless | Cross-session episodic store |
 | **Dependencies** | External (ML frameworks) | Python 3.9+ stdlib only |
-| **Tests** | Minimal | 500+ |
+| **Tests** | Minimal | [540 unit](skills/schliff/tests/unit/) + [99 integration](skills/schliff/scripts/test-integration.sh) |
 
 ---
 
@@ -254,16 +270,6 @@ flowchart TB
 The structural score measures **file organization**, not runtime effectiveness. A skill scoring 95/100 structurally can still produce wrong output at runtime — use `--runtime` scoring for that.
 
 The trigger scorer uses TF-IDF heuristics. Skills whose domain vocabulary overlaps with generic terms (e.g., "review", "analyze") may hit a precision ceiling around 75-80. [Precision/recall reporting](skills/schliff/scripts/scoring/triggers.py) helps diagnose this.
-
----
-
-## Ecosystem
-
-```
-skill-creator  -->  v1 SKILL.md  -->  schliff score  -->  /schliff:auto  -->  ship
-```
-
-Anthropic's [skill-creator course](https://github.com/anthropics/courses/tree/master/claude-code/09-skill-creator) teaches you to build a v1 skill. Schliff grinds it to production quality.
 
 ---
 

@@ -135,7 +135,10 @@ def score_clarity(skill_path: str) -> dict:
     for i, line in enumerate(lines):
         if _RE_AMBIGUOUS_PRONOUN.match(line):
             # Check if preceding line provides a clear subject
-            if i > 0:
+            if i == 0:
+                # First line has no preceding context — pronoun is ambiguous
+                ambiguous_pronouns.append(f"line {i + 1}")
+            else:
                 prev = lines[i - 1].strip()
                 # If previous line is empty or a header, the pronoun is ambiguous
                 if not prev or prev.startswith("#"):

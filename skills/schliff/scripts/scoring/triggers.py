@@ -142,8 +142,8 @@ def score_triggers(skill_path: str, eval_suite: Optional[dict]) -> dict:
 
     # Compute precision and recall (Issue #13)
     true_positives = sum(1 for d in details_per_trigger if d["predicted"] and d["expected"])
-    precision = round(true_positives / (true_positives + false_positives) * 100, 1) if (true_positives + false_positives) > 0 else 100.0
-    recall = round(true_positives / (true_positives + false_negatives) * 100, 1) if (true_positives + false_negatives) > 0 else 100.0
+    precision = round(true_positives / (true_positives + false_positives) * 100, 1) if (true_positives + false_positives) > 0 else 0.0
+    recall = round(true_positives / (true_positives + false_negatives) * 100, 1) if (true_positives + false_negatives) > 0 else 0.0
 
     return {
         "score": score,

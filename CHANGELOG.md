@@ -3,6 +3,29 @@
 All notable changes to Schliff are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [6.3.0] - 2026-03-26
+
+### Added
+- `schliff diff <path>` command — show score delta vs. previous commit (or any `--ref`)
+  - Ref validation (prevents git flag injection), path containment check, size limit guard
+  - Human-readable and `--json` output formats
+- CLI quick-start epilog — `schliff` without args now shows demo/score/doctor hints
+- 85 new tests: cmd_diff (18), composite weights (33), diff scoring (34)
+- README: context bridge explaining Claude Code for non-users
+- README: commands table split into CLI (standalone) vs Claude Code (require integration)
+- README: "Where Schliff fits" ecosystem diagram moved to Quick Start section
+
+### Fixed
+- Scoring: trigger precision/recall reported 100.0 when no predictions existed (now 0.0)
+- Scoring: clarity scorer skipped ambiguous pronoun detection on first line (i==0 case)
+- Scoring: efficiency scorer returned float instead of int (inconsistent with other dimensions)
+- README: self-score rewording removes circular "99.0/100" claim
+- README: anti-gaming section honestly frames benchmark as self-designed suite
+- README: triggers description corrected from "conflicts between skills" to "eval-suite trigger accuracy"
+- README: test count updated to actual 540 unit + 99 integration with links
+- Security: `score_diff()` now receives resolved absolute path instead of raw user input
+- Docs: stale test counts in ARCHITECTURE.md and CONTRIBUTING.md updated
+
 ## [6.2.0] - 2026-03-25
 
 ### Added
