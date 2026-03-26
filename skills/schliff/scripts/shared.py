@@ -137,18 +137,24 @@ def load_eval_suite(skill_path: str) -> Optional[dict]:
 
 
 def build_scores(skill_path: str, eval_suite: Optional[dict] = None,
-                  include_runtime: bool = False) -> dict:
+                  include_runtime: bool = False, fmt: Optional[str] = None) -> dict:
     """Build the standard scoring dict for a skill.
 
     Centralizes the dimension-scoring calls used by score, badge, and doctor.
     Supports non-SKILL.md formats (CLAUDE.md, .cursorrules, AGENTS.md) by
     normalizing content to SKILL.md shape before scoring — zero scorer changes.
+
+    Args:
+        fmt: Optional format override. When provided, skips auto-detection.
+             Useful when the filename doesn't match the actual format
+             (e.g., a file named 'instructions.md' that is CLAUDE.md-style).
     """
     import os
     import tempfile
     from scoring.formats import detect_format, normalize_content
 
-    fmt = detect_format(skill_path)
+    if fmt is None:
+        fmt = detect_format(skill_path)
     tmp_path: Optional[str] = None
     if fmt != "skill.md":
         content = read_skill_safe(skill_path)

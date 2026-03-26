@@ -163,3 +163,36 @@ def test_no_arguments():
     result = _run_cli()
     # argparse prints help to stdout; should not crash
     assert result.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# 9. cmd_score — --format flag accepted and surfaced in JSON output
+# ---------------------------------------------------------------------------
+
+def test_score_format_flag_accepted(skill_file):
+    """--format flag is accepted without error."""
+    result = _run_cli("score", "--format", "skill.md", skill_file)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+
+
+def test_score_json_includes_format_key(skill_file):
+    """JSON output includes a 'format' key."""
+    result = _run_cli("score", "--json", skill_file)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    data = json.loads(result.stdout)
+    assert "format" in data, f"'format' key missing from JSON output: {data.keys()}"
+    assert isinstance(data["format"], str)
+
+
+def test_score_format_override_in_json(skill_file):
+    """--format override appears in JSON output."""
+    result = _run_cli("score", "--json", "--format", "claude.md", skill_file)
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    data = json.loads(result.stdout)
+    assert data["format"] == "claude.md"
+
+
+def test_score_format_invalid_choice(skill_file):
+    """--format with an invalid choice exits non-zero."""
+    result = _run_cli("score", "--format", "invalid_format", skill_file)
+    assert result.returncode != 0

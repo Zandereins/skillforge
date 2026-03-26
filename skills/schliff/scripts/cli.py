@@ -50,13 +50,22 @@ def cmd_score(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     eval_suite = _load_eval_suite_from_args(args)
-    scores = build_scores(args.skill_path, eval_suite, include_runtime=True)
+    fmt_override = getattr(args, "format", None)
+    scores = build_scores(args.skill_path, eval_suite, include_runtime=True, fmt=fmt_override)
+
+    # Determine the effective format for display
+    if fmt_override:
+        detected_fmt = fmt_override
+    else:
+        from scoring.formats import detect_format
+        detected_fmt = detect_format(args.skill_path)
 
     composite = compute_composite(scores)
 
     if getattr(args, "json", False):
         result = {
             "skill_path": args.skill_path,
+            "format": detected_fmt,
             "composite_score": composite["score"],
             "dimensions": {k: round(v["score"], 1) if isinstance(v["score"], float) else v["score"] for k, v in scores.items()},
             "warnings": composite["warnings"],
@@ -94,6 +103,8 @@ def cmd_score(args: argparse.Namespace) -> None:
             fix_count=fix_count,
         )
         print(output)
+        if detected_fmt != "skill.md":
+            print(f"  Format: {detected_fmt} (normalized)")
 
 
 def cmd_verify(args: argparse.Namespace) -> None:
@@ -373,6 +384,12 @@ def main():
     score_parser.add_argument("skill_path", help="Path to SKILL.md")
     score_parser.add_argument("--json", action="store_true", help="JSON output")
     score_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
+    score_parser.add_argument(
+        "--format",
+        choices=["skill.md", "claude.md", "cursorrules", "agents.md", "unknown"],
+        default=None,
+        help="Override format detection (useful when filename doesn't match content type)",
+    )
 
     # verify command
     verify_parser = subparsers.add_parser("verify", help="CI gate — exit 0/1 based on score")
