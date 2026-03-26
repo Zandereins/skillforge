@@ -1,10 +1,7 @@
-"""Unit tests for score_security() — TDD Red phase.
-
-These tests define the contract for the security scoring dimension.
-They will FAIL until scoring/security.py is implemented.
-"""
+"""Unit tests for the security scoring dimension."""
 import pytest
 
+from shared import invalidate_cache
 from scoring.security import score_security
 
 
@@ -262,6 +259,7 @@ class TestScoreSecurity:
         """Helper to write a skill file and return its path."""
         skill_file = tmp_path / "SKILL.md"
         skill_file.write_text(content)
+        invalidate_cache(str(skill_file))
         return str(skill_file)
 
     def test_benign_skill_scores_100(self, tmp_path):
@@ -370,3 +368,34 @@ class TestScoreSecurity:
         # Obfuscation should appear in category penalties
         assert "obfuscation" in result["details"]["category_penalties"]
         assert result["details"]["category_penalties"]["obfuscation"] > 0
+
+    def test_unclosed_code_block_still_detects_patterns(self, tmp_path):
+        """Unclosed code blocks should not suppress pattern detection.
+
+        If a ``` is never closed, regex won't match a code-block region,
+        so patterns after the unclosed fence are still in 'plain text' and
+        should be penalized normally.
+        """
+        content = """\
+---
+name: unclosed-fence
+description: Skill with unclosed code block.
+---
+
+# Unclosed
+
+```bash
+echo "starting setup"
+echo "another line of padding to push the distance beyond negation window"
+echo "more padding here"
+
+rm -rf /
+chmod 777 /etc/shadow
+"""
+        path = self._write_skill(tmp_path, content)
+        result = score_security(path)
+
+        # Patterns after unclosed fence are NOT inside a matched code block,
+        # so they should be detected as dangerous
+        assert result["score"] < 100
+        assert len(result["issues"]) >= 1

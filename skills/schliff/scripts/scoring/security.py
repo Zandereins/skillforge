@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from shared import read_skill_safe, invalidate_cache
+from shared import read_skill_safe
 from scoring.patterns import (
     _RE_SEC_PROMPT_INJECTION,
     _RE_SEC_INSTRUCTION_OVERRIDE,
@@ -136,9 +136,6 @@ def score_security(skill_path: str) -> dict:
             }
         }
     """
-    # Invalidate cache to avoid stale reads when the same path is reused
-    # (e.g. in test suites that overwrite the same file).
-    invalidate_cache(skill_path)
     content = read_skill_safe(skill_path)
 
     # Meta-discourse detection

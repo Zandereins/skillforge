@@ -36,6 +36,7 @@ _file_cache: dict[str, str] = {}
 VALID_DIMENSIONS = {
     "structure", "triggers", "quality", "edges",
     "efficiency", "composability", "clarity", "runtime",
+    "security",
 }
 
 # --- Regex for description extraction ---
