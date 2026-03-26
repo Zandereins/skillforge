@@ -8,14 +8,18 @@ Rate limiting: handled by Vercel WAF in production — not implemented here.
 
 import json
 import os
+import re
 import tempfile
 from http.server import BaseHTTPRequestHandler
 
 MAX_CONTENT_SIZE = 500 * 1024  # 500 KB
 
+# Only alphanumeric, hyphens, underscores, dots — no path separators
+_SAFE_FILENAME_RE = re.compile(r"^[a-zA-Z0-9_\-]+\.md$")
+
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Content-Type": "application/json",
 }
@@ -37,12 +41,13 @@ def _score_to_grade(score: float) -> str:
 
 def _run_scoring(content: str, filename: str) -> dict:
     """Write content to a temp file, run schliff scoring, return result dict."""
-    # Import at function level to optimize cold starts
     from skills.schliff.scripts.shared import build_scores
     from skills.schliff.scripts.scoring.composite import compute_composite
 
     tmp_dir = tempfile.mkdtemp()
-    skill_path = os.path.join(tmp_dir, filename)
+    # Use only the basename to prevent path traversal
+    safe_name = os.path.basename(filename)
+    skill_path = os.path.join(tmp_dir, safe_name)
 
     try:
         with open(skill_path, "w", encoding="utf-8") as f:
@@ -62,7 +67,6 @@ def _run_scoring(content: str, filename: str) -> dict:
             "total_dimensions": composite.get("total_dimensions", 0),
         }
     finally:
-        # Clean up temp file and directory
         try:
             os.unlink(skill_path)
             os.rmdir(tmp_dir)
@@ -85,10 +89,22 @@ class handler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.end_headers()
 
+    def do_GET(self):
+        """Return API info for browser visitors."""
+        self._send_json(200, {
+            "service": "schliff-playground",
+            "usage": "POST /api/score with {\"content\": \"...\", \"filename\": \"SKILL.md\"}",
+            "max_size_kb": MAX_CONTENT_SIZE // 1024,
+        })
+
     def do_POST(self):
         """Score a skill file and return the result."""
-        # Read and validate content length
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            self._send_json(400, {"error": "Invalid Content-Length header"})
+            return
+
         if content_length > MAX_CONTENT_SIZE:
             self._send_json(413, {
                 "error": "Content too large",
@@ -100,7 +116,6 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Empty request body"})
             return
 
-        # Parse JSON body
         try:
             raw_body = self.rfile.read(content_length)
             body = json.loads(raw_body)
@@ -115,16 +130,18 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Missing or invalid 'content' field"})
             return
 
-        if not filename.endswith(".md"):
-            self._send_json(400, {"error": "Filename must end with .md"})
+        if not _SAFE_FILENAME_RE.match(filename):
+            self._send_json(400, {
+                "error": "Invalid filename",
+                "detail": "Must match [a-zA-Z0-9_-]+.md (no path separators)",
+            })
             return
 
-        # Run scoring
         try:
             result = _run_scoring(content, filename)
             self._send_json(200, result)
         except Exception as exc:
             self._send_json(500, {
                 "error": "Scoring failed",
-                "detail": str(exc),
+                "detail": type(exc).__name__,
             })

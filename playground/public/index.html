@@ -675,11 +675,7 @@ Instructions go here..." spellcheck="false"></textarea>
   var btnClear = document.getElementById('btnClear');
 
   // ── Helpers ──
-  function escapeHtml(str) {
-    var div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+  var MAX_CONTENT_KB = 500;
 
   function setColor(score) {
     if (score >= 75) return 'var(--green)';
@@ -863,6 +859,12 @@ Instructions go here..." spellcheck="false"></textarea>
       return;
     }
 
+    var contentBytes = new Blob([content]).size;
+    if (contentBytes > MAX_CONTENT_KB * 1024) {
+      showToast('Content too large (max ' + MAX_CONTENT_KB + ' KB)');
+      return;
+    }
+
     scoring = true;
     btnScore.disabled = true;
 
@@ -940,7 +942,7 @@ Instructions go here..." spellcheck="false"></textarea>
   function renderResults(data) {
     var score = data.composite_score != null ? data.composite_score : (data.score != null ? data.score : 0);
     var grade = data.grade || computeGrade(score);
-    var dimensions = data.dimensions || data.dimension_scores || {};
+    var dimensions = data.dimensions || {};
     var warnings = data.warnings || [];
     var scoreColor = setColor(score);
 

@@ -46,7 +46,11 @@ runs:
         INPUT_VERSION: ${{ inputs.schliff-version }}
       run: |
         if [ -n "$INPUT_VERSION" ]; then
-          pip install "schliff==$INPUT_VERSION"
+          # Support both exact versions ("6.3.0") and specifiers (">=7.0")
+          case "$INPUT_VERSION" in
+            \>*|\<*|~*|!*) pip install "schliff$INPUT_VERSION" ;;
+            *)              pip install "schliff==$INPUT_VERSION" ;;
+          esac
         else
           pip install schliff
         fi
@@ -78,8 +82,9 @@ runs:
         COMPOSITE=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['composite_score'])")
         echo "composite=$COMPOSITE" >> "$GITHUB_OUTPUT"
 
-        GRADE=$(python3 -c "
-        s = float('$COMPOSITE')
+        GRADE=$(SCORE_VAL="$COMPOSITE" python3 -c "
+        import os
+        s = float(os.environ['SCORE_VAL'])
         g = 'S' if s >= 95 else 'A' if s >= 85 else 'B' if s >= 75 else 'C' if s >= 65 else 'D' if s >= 50 else 'F'
         print(g)
         ")
@@ -167,6 +172,7 @@ runs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             issue_number: context.issue.number,
+            per_page: 100,
           });
           const existing = comments.find(c => c.body?.includes(marker));
 
