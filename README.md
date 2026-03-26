@@ -119,6 +119,7 @@ Anthropic's [skill-creator course](https://github.com/anthropics/courses/tree/ma
 | Skill | Before | After | Iterations | Author |
 |-------|--------|-------|------------|--------|
 | agent-review-panel | 64.0 [D] | 85.6 [A] | 3 rounds | [@wan-huiyan](https://github.com/wan-huiyan) |
+| shieldclaw (OpenClaw plugin) | 68.3 [C] | 94.6 [A] | 1 round | [@Zandereins](https://github.com/Zandereins) |
 | demo skill (`demo/bad-skill/`) | 54.0 [D] | 98.3 [S] | 18 | [@Zandereins](https://github.com/Zandereins) |
 
 The demo skill — a vague, hedging-filled deployment helper — goes from [D] to [S] in 18 autonomous iterations:
@@ -135,6 +136,8 @@ The demo skill — a vague, hedging-filled deployment helper — goes from [D] t
 
 Real-world skills vary. Complex skills plateau around [A] to [S] depending on eval suite coverage.
 
+[ShieldClaw](https://github.com/Zandereins/openclaw-skill-shieldclaw) is a prompt injection defense plugin for the OpenClaw agent framework — not a Claude Code skill. Schliff scored its SKILL.md at 68.3 [C], and after one round of `/schliff:auto`, it reached 94.6 [A] while staying under 300 tokens. Adding an eval-suite unlocked 3 previously-unmeasured dimensions (triggers, quality, edges), which drove most of the 26-point gain.
+
 *Run `schliff score` on your skill and [add your result](https://github.com/Zandereins/schliff/edit/main/README.md).*
 
 ### Community
@@ -146,6 +149,7 @@ Real-world skills vary. Complex skills plateau around [A] to [S] depending on ev
 ### Used by
 
 - [@wan-huiyan](https://github.com/wan-huiyan) — agent-review-panel (64 → 85.6, 3 rounds)
+- [@Zandereins](https://github.com/Zandereins) — shieldclaw, OpenClaw plugin (68.3 → 94.6, 1 round)
 - *[Add your project](https://github.com/Zandereins/schliff/issues/new?template=share_results.md)*
 
 ---

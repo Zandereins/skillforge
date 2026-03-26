@@ -1,0 +1,17 @@
+{
+  "skill_path": "/tmp/shieldclaw/SKILL.md",
+  "composite_score": 68.3,
+  "dimensions": {
+    "structure": 95,
+    "triggers": -1,
+    "quality": -1,
+    "edges": -1,
+    "efficiency": 60,
+    "composability": 20,
+    "clarity": 100,
+    "runtime": -1
+  },
+  "warnings": [
+    "4/8 dimensions measured (weight coverage: 38%). Unmeasured: triggers, quality, edges"
+  ]
+}

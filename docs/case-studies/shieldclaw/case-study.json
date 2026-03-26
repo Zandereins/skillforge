@@ -1,0 +1,98 @@
+{
+  "title": "ShieldClaw: Security Skill Optimization with Schliff",
+  "project": "openclaw-skill-shieldclaw",
+  "repo": "https://github.com/Zandereins/openclaw-skill-shieldclaw",
+  "date": "2026-03-26",
+  "schliff_version": "6.3.0",
+  "skill_type": "OpenClaw prompt injection defense plugin",
+  "before": {
+    "composite_score": 68.3,
+    "grade": "C",
+    "dimensions_measured": 4,
+    "dimensions": {
+      "structure": 95,
+      "triggers": -1,
+      "quality": -1,
+      "edges": -1,
+      "efficiency": 60,
+      "composability": 20,
+      "clarity": 100
+    },
+    "key_issues": [
+      "No eval-suite.json — 3 dimensions unmeasurable (triggers, quality, edges)",
+      "Low composability: 8/10 checks failed (no scope boundaries, no I/O contract, no handoffs)",
+      "Moderate efficiency: no imperative-voice lines, no WHY-reasoning, no bash code blocks"
+    ]
+  },
+  "after": {
+    "composite_score": 94.6,
+    "grade": "A",
+    "dimensions_measured": 7,
+    "dimensions": {
+      "structure": 100,
+      "triggers": 100,
+      "quality": 90,
+      "edges": 100,
+      "efficiency": 83,
+      "composability": 86,
+      "clarity": 100
+    }
+  },
+  "delta": {
+    "composite": "+26.3",
+    "grade_change": "C → A",
+    "dimensions_unlocked": 3,
+    "structure": "+5",
+    "efficiency": "+23",
+    "composability": "+66",
+    "clarity": "0 (maintained 100)"
+  },
+  "changes_made": [
+    {
+      "category": "Efficiency",
+      "changes": [
+        "Rewrote rules to start with imperative verbs (Treat, Guard, Flag, Detect, Identify, Verify)",
+        "Added 3x WHY-reasoning clauses (because, since)",
+        "Converted scanner usage to ```bash code block",
+        "Added concrete example with e.g. pattern",
+        "Added negative scope boundary sentence"
+      ]
+    },
+    {
+      "category": "Structure",
+      "changes": [
+        "Added real example using e.g. pattern to fix no_real_examples issue"
+      ]
+    },
+    {
+      "category": "Composability",
+      "changes": [
+        "Added 'Scope & Integration' section with all 8 missing composability checks",
+        "Positive scope, negative scope, I/O contract, handoff points",
+        "Error behavior, idempotency, dependency declarations, version compat"
+      ]
+    },
+    {
+      "category": "Eval Suite",
+      "changes": [
+        "Created eval-suite.json with 10 triggers, 6 test cases, 7 edge cases",
+        "All 4 assertion types covered (contains, pattern, excludes, format)",
+        "All 6 edge case categories covered"
+      ]
+    }
+  ],
+  "constraints_respected": [
+    "SKILL.md remained under ~300 tokens (OpenClaw awareness layer budget)",
+    "All security rules preserved — no functional changes to detection behavior",
+    "No Claude-Code-specific patterns — fully OpenClaw compatible",
+    "Zero hedging/filler language introduced"
+  ],
+  "iterations": 1,
+  "files": [
+    "SKILL-before.md",
+    "SKILL-after.md",
+    "eval-suite.json",
+    "baseline-score.json",
+    "optimized-score.json"
+  ]
+}

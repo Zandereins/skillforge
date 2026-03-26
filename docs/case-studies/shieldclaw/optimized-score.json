@@ -1,0 +1,15 @@
+{
+  "skill_path": "/tmp/shieldclaw/SKILL.md",
+  "composite_score": 94.6,
+  "dimensions": {
+    "structure": 100,
+    "triggers": 100,
+    "quality": 90,
+    "edges": 100,
+    "efficiency": 83,
+    "composability": 86,
+    "clarity": 100,
+    "runtime": -1
+  },
+  "warnings": []
+}
