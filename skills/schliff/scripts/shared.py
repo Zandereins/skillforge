@@ -141,27 +141,50 @@ def build_scores(skill_path: str, eval_suite: Optional[dict] = None,
     """Build the standard scoring dict for a skill.
 
     Centralizes the dimension-scoring calls used by score, badge, and doctor.
+    Supports non-SKILL.md formats (CLAUDE.md, .cursorrules, AGENTS.md) by
+    normalizing content to SKILL.md shape before scoring — zero scorer changes.
     """
-    # Lazy imports to avoid circular deps and keep CLI startup fast
-    from scoring import (
-        score_structure, score_triggers, score_efficiency,
-        score_composability, score_quality, score_edges,
-        score_clarity,
-    )
+    import os
+    import tempfile
+    from scoring.formats import detect_format, normalize_content
 
-    scores = {
-        "structure": score_structure(skill_path),
-        "triggers": score_triggers(skill_path, eval_suite),
-        "quality": score_quality(skill_path, eval_suite),
-        "edges": score_edges(skill_path, eval_suite),
-        "efficiency": score_efficiency(skill_path),
-        "composability": score_composability(skill_path),
-        "clarity": score_clarity(skill_path),
-    }
+    fmt = detect_format(skill_path)
+    tmp_path: Optional[str] = None
+    if fmt != "skill.md":
+        content = read_skill_safe(skill_path)
+        normalized = normalize_content(content, fmt)
+        tmp = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", delete=False, encoding="utf-8"
+        )
+        tmp.write(normalized)
+        tmp.close()
+        tmp_path = tmp.name
+        skill_path = tmp_path  # scorers now see normalized content
 
-    if include_runtime:
-        from scoring import score_runtime
-        scores["runtime"] = score_runtime(skill_path, eval_suite, enabled=False)
+    try:
+        # Lazy imports to avoid circular deps and keep CLI startup fast
+        from scoring import (
+            score_structure, score_triggers, score_efficiency,
+            score_composability, score_quality, score_edges,
+            score_clarity,
+        )
+
+        scores = {
+            "structure": score_structure(skill_path),
+            "triggers": score_triggers(skill_path, eval_suite),
+            "quality": score_quality(skill_path, eval_suite),
+            "edges": score_edges(skill_path, eval_suite),
+            "efficiency": score_efficiency(skill_path),
+            "composability": score_composability(skill_path),
+            "clarity": score_clarity(skill_path),
+        }
+
+        if include_runtime:
+            from scoring import score_runtime
+            scores["runtime"] = score_runtime(skill_path, eval_suite, enabled=False)
+    finally:
+        if tmp_path is not None:
+            os.unlink(tmp_path)
 
     return scores
 
