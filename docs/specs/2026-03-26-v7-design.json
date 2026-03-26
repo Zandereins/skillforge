@@ -1,0 +1,286 @@
+{
+  "title": "Schliff v7.0 Design Spec — Multi-Format, Security, Batch, Playground, Leaderboard",
+  "status": "APPROVED",
+  "created": "2026-03-26",
+  "author": "Franz Paul + Claude Opus 4.6",
+  "sprint": "4 weeks, full-time (~104h)",
+  "thesis": "Schliff wins by scoring any agent instruction file across 8 dimensions including security. Breadth (multi-format) + depth (security, anti-gaming) + virality (leaderboard, playground). Develop with Anthropic, not against them.",
+
+  "week_1": {
+    "theme": "Multi-Format + --url",
+    "features": [
+      {
+        "name": "Multi-Format Support (FormatProfile)",
+        "effort_hours": 20,
+        "new_files": ["skills/schliff/scripts/scoring/formats.py"],
+        "modified_files": ["shared.py", "scoring/structure.py", "scoring/triggers.py", "scoring/composite.py", "cli.py", "skill_mesh.py", "doctor.py"],
+        "unchanged_files": ["scoring/efficiency.py", "scoring/composability.py", "scoring/clarity.py", "scoring/quality.py", "scoring/edges.py", "scoring/patterns.py", "nlp.py", "terminal_art.py"],
+        "architecture": {
+          "pattern": "FormatProfile frozen dataclass with function pointers (no inheritance, no ABC)",
+          "detection": "Filename-based (deterministic, O(1)), with --format CLI override",
+          "formats": {
+            "skill.md": {"filenames": ["SKILL.md"], "has_frontmatter": true, "all_dimensions": true},
+            "claude.md": {"filenames": ["CLAUDE.md"], "has_frontmatter": false, "description_source": "first_paragraph", "new_check": "section_coverage"},
+            "cursorrules": {"filenames": [".cursorrules"], "has_frontmatter": false, "description_source": "first_sentences", "high_weight": ["efficiency", "clarity"]},
+            "agents.md": {"filenames": ["AGENTS.md"], "has_frontmatter": "optional", "description_source": "frontmatter_or_paragraph"},
+            "generic": {"filenames": ["*.md"], "has_frontmatter": false, "fallback": true}
+          },
+          "backward_compat": "SKILL.md FormatProfile produces identical scores to v6.3.0. All existing APIs keep signatures. fmt parameter is Optional with None default."
+        },
+        "loc_estimate": {"new": 260, "modified": 110},
+        "dimension_format_matrix": {
+          "structure": {"skill.md": "full (30pts frontmatter)", "claude.md": "adapted (section_coverage)", "cursorrules": "minimal (length+imperative)", "agents.md": "adapted (optional frontmatter)"},
+          "triggers": {"skill.md": "full (TF-IDF)", "claude.md": "adapted (first paragraph)", "cursorrules": "adapted (first sentences)", "agents.md": "adapted"},
+          "quality": "format-agnostic (eval-suite only)",
+          "edges": "format-agnostic (eval-suite only)",
+          "efficiency": "format-agnostic (body text analysis)",
+          "composability": "format-agnostic (body text analysis)",
+          "clarity": "format-agnostic (body text analysis)"
+        },
+        "per_format_composite_weights": {
+          "skill.md": {"structure": 0.15, "triggers": 0.20, "quality": 0.20, "edges": 0.15, "efficiency": 0.10, "composability": 0.10, "clarity": 0.05},
+          "claude.md": {"structure": 0.20, "triggers": 0.10, "quality": 0.15, "edges": 0.10, "efficiency": 0.15, "composability": 0.05, "clarity": 0.15},
+          "cursorrules": {"structure": 0.10, "triggers": 0.10, "quality": 0.15, "edges": 0.10, "efficiency": 0.20, "composability": 0.05, "clarity": 0.20},
+          "agents.md": {"structure": 0.15, "triggers": 0.15, "quality": 0.20, "edges": 0.15, "efficiency": 0.10, "composability": 0.10, "clarity": 0.10}
+        }
+      },
+      {
+        "name": "schliff score --url <github-url>",
+        "effort_hours": 4,
+        "modified_files": ["cli.py", "shared.py"],
+        "security": {
+          "allowed_hosts": ["raw.githubusercontent.com", "github.com", "gist.githubusercontent.com"],
+          "https_only": true,
+          "max_size_bytes": 500000,
+          "timeout_seconds": 10,
+          "no_redirect_to_private": true,
+          "tempfile_cleanup": "immediate"
+        },
+        "use_case": "Show HN: 'schliff score --url https://github.com/...' in every comment reply"
+      }
+    ]
+  },
+
+  "week_2": {
+    "theme": "Security + Batch",
+    "features": [
+      {
+        "name": "Security Scoring Dimension",
+        "effort_hours": 25,
+        "new_files": ["skills/schliff/scripts/scoring/security.py"],
+        "modified_files": ["scoring/patterns.py", "scoring/__init__.py", "shared.py", "scoring/composite.py", "cli.py"],
+        "scoring_model": "deductive (100 minus penalties)",
+        "categories": [
+          {
+            "name": "prompt_injection",
+            "patterns": 3,
+            "severities": ["CRITICAL (25pts)", "HIGH (15pts)"],
+            "detects": "instruction override, role hijacking, hidden directives"
+          },
+          {
+            "name": "data_exfiltration",
+            "patterns": 3,
+            "severities": ["CRITICAL (25pts)", "HIGH (15pts)"],
+            "detects": "exfil URLs, suspicious domains, secret harvesting"
+          },
+          {
+            "name": "dangerous_commands",
+            "patterns": 3,
+            "severities": ["HIGH (15pts)", "MEDIUM (8pts)"],
+            "detects": "rm -rf, eval/exec, pipe to shell"
+          },
+          {
+            "name": "obfuscation",
+            "patterns": 4,
+            "severities": ["CRITICAL (25pts)", "HIGH (15pts)"],
+            "detects": "base64 payloads, zero-width chars, homoglyphs, hex escapes"
+          },
+          {
+            "name": "overpermission",
+            "patterns": 2,
+            "severities": ["HIGH (15pts)", "MEDIUM (8pts)"],
+            "detects": "unrestricted access requests, broad tool permissions"
+          },
+          {
+            "name": "missing_boundaries",
+            "patterns": 1,
+            "type": "bonus (+5pts)",
+            "detects": "positive security patterns (do not execute, sandbox, restricted)"
+          }
+        ],
+        "false_positive_mitigation": {
+          "filter_1": "Code-block exclusion (regex in code blocks ignored, except obfuscation)",
+          "filter_2": "Meta-discourse detection (penalty halved when skill DESCRIBES attacks, not PERFORMS them)",
+          "filter_3": "Frontmatter security-signal (penalty halved for categories 1+3 when skill name/description indicates security domain)",
+          "threshold_tuning": "Zero-width chars: 1-2 = LOW (3pts), 3+ = CRITICAL (25pts)"
+        },
+        "composite_integration": {
+          "weight": 0.08,
+          "cap_rule": "security < 30 → composite capped at 40",
+          "activation": "opt-in via --security flag (like clarity)"
+        },
+        "total_patterns": 16,
+        "test_plan": "12 unit tests + 4 golden files (benign, malicious, security-training, borderline)"
+      },
+      {
+        "name": "Directory/Batch Mode",
+        "effort_hours": 13,
+        "new_files": ["skills/schliff/scripts/discovery.py", "skills/schliff/scripts/batch.py"],
+        "modified_files": ["cli.py", "doctor.py", "terminal_art.py"],
+        "commands": {
+          "schliff score <dir>": "Score all instruction files in directory",
+          "schliff score .": "Project discovery mode (SKILL.md, CLAUDE.md, .cursorrules, AGENTS.md)",
+          "schliff verify <dir>": "CI gate for directories (exit 1 if ANY file below threshold)"
+        },
+        "output": {
+          "default": "summary table (file, score, grade, coverage, issues)",
+          "verbose": "per-file dimension breakdown",
+          "json": "full BatchReport for CI artifacts"
+        },
+        "performance": "sequential (50ms/file, 1s for 20 files), MAX_SCAN_FILES=1000",
+        "doctor_evolution": "also scans project-local CLAUDE.md, .cursorrules, AGENTS.md with partial scoring"
+      }
+    ]
+  },
+
+  "week_3": {
+    "theme": "Playground + GitHub Action",
+    "features": [
+      {
+        "name": "Web Playground (schliff.dev/play)",
+        "effort_hours": 8,
+        "approach": "serverless Python API (Vercel/Cloudflare), stateless POST endpoint",
+        "features_list": [
+          "Paste SKILL.md content, get instant score",
+          "Pre-loaded demo examples (bad skill, ShieldClaw before/after)",
+          "Shareable URLs (URL-encoded content or short-link)",
+          "No user accounts, no PII",
+          "Dark mode, matches terminal aesthetic"
+        ],
+        "why": "Eliminates install prerequisite. Every blog post/tweet links here. Highest conversion impact per effort."
+      },
+      {
+        "name": "GitHub Action (real, published to Marketplace)",
+        "effort_hours": 4,
+        "features_list": [
+          "runs-on: ubuntu-latest, uses python, pip install schliff",
+          "inputs: skill-path, minimum-score, comment-on-pr",
+          "PR comment with score table + dimension breakdown",
+          "Exit code 1 on failure for branch protection"
+        ],
+        "why": "README already shows 'uses: Zandereins/schliff@v6' but it 404s. Silent conversion killer."
+      }
+    ]
+  },
+
+  "week_4": {
+    "theme": "Leaderboard + Polish + Release",
+    "features": [
+      {
+        "name": "Public Leaderboard (skills.schliff.dev)",
+        "effort_hours": 15,
+        "approach": "static site (Next.js or plain HTML) + serverless API for submissions",
+        "features_list": [
+          "Opt-in submission via schliff score --submit",
+          "Top skills by composite score, by dimension, by format",
+          "Most-improved skills (before/after delta)",
+          "Recent submissions feed",
+          "No user accounts — GitHub URL + skill name + score JSON"
+        ],
+        "viral_mechanics": [
+          "Competitive motivation (rank against peers)",
+          "Shareable profile URLs",
+          "Weekly highlights (tweetable)",
+          "Badge links back to leaderboard entry"
+        ]
+      },
+      {
+        "name": "Tests + Docs + Release",
+        "effort_hours": 15,
+        "tasks": [
+          "Unit tests for all new features (target: 600+ total)",
+          "Integration tests for multi-format + batch + --url",
+          "Security dimension golden file tests",
+          "README update: new features, new CLI examples",
+          "CHANGELOG v7.0 entry",
+          "PyPI publish",
+          "GitHub Release with structured body"
+        ]
+      }
+    ]
+  },
+
+  "out_of_scope_v7": [
+    "VS Code extension (v8.0)",
+    "Rust rewrite for speed (not needed yet)",
+    "LLM-based semantic analysis",
+    "Skill creation tools (Anthropic's domain)",
+    "Runtime scoring improvements",
+    "Plugin/extension architecture (v8.0)",
+    "Domain-specific rubrics (v8.0)",
+    "Certification program (v8.0)",
+    "Enterprise dashboard (v8.0)"
+  ],
+
+  "verification": {
+    "multi_format": [
+      "schliff score SKILL.md produces identical score to v6.3.0 (regression test)",
+      "schliff score CLAUDE.md scores partial dimensions, labels coverage",
+      "schliff score .cursorrules works with no frontmatter",
+      "schliff score AGENTS.md handles optional frontmatter",
+      "schliff score --format generic works on any .md file"
+    ],
+    "security": [
+      "Benign skill scores 100",
+      "Malicious skill scores 0 (CRITICAL findings)",
+      "ShieldClaw SKILL.md does NOT false-positive (meta-discourse mitigation)",
+      "Security < 30 caps composite at 40",
+      "Code blocks excluded from scanning (except obfuscation)"
+    ],
+    "batch": [
+      "schliff score skills/ scores all SKILL.md files",
+      "schliff score . finds CLAUDE.md + .cursorrules + SKILL.md",
+      "schliff verify skills/ exits 1 on failure",
+      "--json output parseable by jq"
+    ],
+    "url": [
+      "schliff score --url https://raw.githubusercontent.com/... works",
+      "Non-HTTPS URLs rejected",
+      "Non-allowed hosts rejected",
+      "Files > 500KB rejected"
+    ],
+    "playground": [
+      "POST /api/score with SKILL.md content returns JSON score",
+      "Pre-loaded demo works",
+      "Shareable URLs work"
+    ],
+    "leaderboard": [
+      "schliff score --submit uploads to API",
+      "Leaderboard displays sorted results",
+      "Duplicate submissions update existing entry"
+    ]
+  },
+
+  "anthropic_alignment": {
+    "why_this_impresses": [
+      "Multi-format = 'We serve the whole ecosystem, not just Claude Code'",
+      "Security dimension = direct answer to ToxicSkills (Snyk 2026)",
+      "Leaderboard = 'We measure the quality of the ecosystem YOU built'",
+      "No runtime scoring focus = we don't compete with Claude Code's runtime",
+      "Open methodology = Anthropic can adopt/reference without reinventing"
+    ],
+    "what_we_dont_build": [
+      "Skill creation tools (Anthropic's skill-creator course)",
+      "Runtime behavior testing (Anthropic owns the runtime)",
+      "Proprietary scoring (all dimensions published + open)",
+      "Skill execution platform (Claude Code's domain)"
+    ],
+    "outreach_plan": {
+      "april_2026": "Email Claude Code PM: 'Schliff v7.0: Multi-Format Skill Quality Standard — Let's Talk'",
+      "june_2026": "Invite 3 Anthropic engineers to Scoring Council",
+      "august_2026": "Spec publication announcement press outreach"
+    }
+  },
+
+  "tagline_v7": "Score any agent instruction file — SKILL.md, CLAUDE.md, .cursorrules, AGENTS.md — across 8 dimensions including security. In one command. Zero dependencies. Zero LLM."
+}
