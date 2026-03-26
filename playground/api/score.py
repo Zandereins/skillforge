@@ -123,6 +123,10 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Invalid JSON", "detail": str(exc)})
             return
 
+        if not isinstance(body, dict):
+            self._send_json(400, {"error": "Request body must be a JSON object"})
+            return
+
         content = body.get("content")
         filename = body.get("filename", "SKILL.md")
 

@@ -897,8 +897,8 @@ Instructions go here..." spellcheck="false"></textarea>
     })
     .then(function(resp) {
       if (!resp.ok) {
-        return resp.text().then(function(text) {
-          throw new Error('HTTP ' + resp.status + ': ' + (text || resp.statusText));
+        return resp.json().catch(function() { return {}; }).then(function(errBody) {
+          throw new Error(errBody.error || ('HTTP ' + resp.status));
         });
       }
       return resp.json();
@@ -1053,8 +1053,8 @@ Instructions go here..." spellcheck="false"></textarea>
       resultsContainer.appendChild(warnSection);
     }
 
-    // Animate score count-up
-    animateScore(0, Math.round(score), 800);
+    // Animate score count-up, then show actual value with decimal
+    animateScore(0, score, 800);
   }
 
   function animateScore(from, to, duration) {

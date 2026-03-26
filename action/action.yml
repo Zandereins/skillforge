@@ -92,7 +92,8 @@ runs:
 
         # Write result to temp file to avoid heredoc injection
         echo "$RESULT" > /tmp/schliff_result.json
-        RESULT_B64=$(base64 < /tmp/schliff_result.json)
+        # -w0 disables line wrapping (Ubuntu default wraps at 76 chars)
+        RESULT_B64=$(base64 -w0 < /tmp/schliff_result.json)
         echo "result_b64=$RESULT_B64" >> "$GITHUB_OUTPUT"
         echo "Score: $COMPOSITE/100 [$GRADE]"
 
