@@ -134,7 +134,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "Missing or invalid 'content' field"})
             return
 
-        if not _SAFE_FILENAME_RE.match(filename):
+        if not isinstance(filename, str) or not _SAFE_FILENAME_RE.match(filename):
             self._send_json(400, {
                 "error": "Invalid filename",
                 "detail": "Must match [a-zA-Z0-9_-]+.md (no path separators)",
