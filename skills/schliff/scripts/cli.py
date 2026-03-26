@@ -190,7 +190,11 @@ def cmd_verify(args: argparse.Namespace) -> None:
         if eval_path.stat().st_size > MAX_SKILL_SIZE:
             print(f"Error: eval-suite exceeds {MAX_SKILL_SIZE} byte size limit", file=sys.stderr)
             sys.exit(2)
-        eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
+        try:
+            eval_suite = json.loads(eval_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            print(f"Error: malformed eval-suite: {e}", file=sys.stderr)
+            sys.exit(2)
     else:
         eval_suite = load_eval_suite(args.skill_path)
 
