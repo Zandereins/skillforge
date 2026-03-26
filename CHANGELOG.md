@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - Ref validation (prevents git flag injection), path containment check, size limit guard
   - Human-readable and `--json` output formats
 - CLI quick-start epilog — `schliff` without args now shows demo/score/doctor hints
+- Case study: ShieldClaw (OpenClaw plugin) — 68.3 [C] → 94.6 [A] in 1 round, cross-ecosystem proof
 - 85 new tests: cmd_diff (18), composite weights (33), diff scoring (34)
 - README: context bridge explaining Claude Code for non-users
 - README: commands table split into CLI (standalone) vs Claude Code (require integration)
