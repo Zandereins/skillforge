@@ -1,0 +1,249 @@
+{
+  "title": "Schliff v7.0 — Revised Implementation Plan (Post 6-Agent Review)",
+  "revision": "v2 — simplified after architecture review",
+  "status": "READY FOR EXECUTION",
+  "created": "2026-03-26",
+  "total_effort": "~90h (down from 104h)",
+  "key_changes_from_v1": [
+    "Multi-format: normalize_content() instead of FormatProfile (40 LOC vs 350 LOC, 0 scorers touched)",
+    "Security: 10 patterns instead of 16, negation-aware matching, graduated cap",
+    "Batch: extend doctor instead of 2 new modules (discovery.py + batch.py eliminated)",
+    "Added: schliff compare, schliff suggest, schliff report --gist (high-virality features)",
+    "Tests: 28 targeted tests instead of 60 generic, P0/P1/P2 prioritized"
+  ],
+
+  "parallelization": {
+    "sessions": 3,
+    "worktrees": {
+      "v7-core": {
+        "branch": "feat/v7-core",
+        "path": "../schliff-v7-core",
+        "scope": "Multi-format normalize + --url + compare + suggest",
+        "session": "S1 (critical path)"
+      },
+      "v7-security": {
+        "branch": "feat/v7-security",
+        "path": "../schliff-v7-security",
+        "scope": "Security dimension (new file, no conflicts)",
+        "session": "S2"
+      },
+      "v7-web": {
+        "branch": "feat/v7-web",
+        "path": "../schliff-v7-web",
+        "scope": "Playground + GitHub Action + Leaderboard scaffold",
+        "session": "S3"
+      }
+    },
+    "merge_order": [
+      "1. feat/v7-core → main (multi-format + --url + compare + suggest)",
+      "2. feat/v7-security → main (rebase on new main, then merge)",
+      "3. feat/v7-web → main (independent, merge last)"
+    ],
+    "conflict_hotfiles": {
+      "cli.py": "S1 owns ALL cli.py changes. S2 prepares cmd_security() in security.py, S1 wires it in during merge.",
+      "shared.py": "S1 adds normalize_content() + fetch_url_safe(). S2 adds 'security' to VALID_DIMENSIONS (1 line). Additive, no conflict.",
+      "composite.py": "S1 does NOT touch. S2 adds security weight + cap. Sequential merge, no conflict."
+    }
+  },
+
+  "week_1": {
+    "theme": "Core Engine + Quick Wins",
+    "S1_critical_path": [
+      {
+        "task": "T1: Baseline snapshot",
+        "effort": "30min",
+        "description": "Run schliff score on own SKILL.md, save JSON as v630_baseline.json fixture. This MUST happen before any code changes.",
+        "command": "schliff score skills/schliff/SKILL.md --json > skills/schliff/tests/fixtures/v630_baseline.json"
+      },
+      {
+        "task": "T2: scoring/formats.py — normalize_content()",
+        "effort": "2h",
+        "description": "New file, ~40 LOC. detect_format(filename) -> str. normalize_content(content, fmt) -> str. Wraps non-SKILL.md content in synthetic YAML frontmatter. SKILL.md passes through unchanged.",
+        "key_insight": "Zero scorer changes. All formats look like SKILL.md to the scoring engine."
+      },
+      {
+        "task": "T3: shared.py — build_scores() normalization",
+        "effort": "1h",
+        "description": "8 LOC change. Before scoring, detect format and normalize. Write normalized content to tempfile if needed. Existing SKILL.md path unchanged.",
+        "regression_test": "test_skill_md_composite_identical_to_baseline (tolerance=0)"
+      },
+      {
+        "task": "T4: cli.py — --format flag + format display",
+        "effort": "1h",
+        "description": "Auto-detect format from filename, show in output header. Add --format override flag."
+      },
+      {
+        "task": "T5: cli.py — --url flag",
+        "effort": "2h",
+        "description": "fetch_url_safe() in shared.py (~25 LOC). --url argument on score parser. Fetch, tempfile, score, cleanup. HTTPS-only, host allowlist, 500KB limit."
+      },
+      {
+        "task": "T6: schliff compare",
+        "effort": "3h",
+        "description": "New command: schliff compare file1 file2. Scores both, shows side-by-side dimension table with deltas. Highlights biggest gap with actionable suggestion. High virality for Show HN.",
+        "viral_angle": "Compare your skill against the reference — share the gap on Twitter"
+      },
+      {
+        "task": "T7: schliff suggest",
+        "effort": "2h",
+        "description": "New command: schliff suggest <path>. Extracts existing issues from scoring, ranks by estimated impact (delta if fixed), shows top 5 with copy-paste fixes where possible. Transforms Schliff from judge to coach.",
+        "output_example": "TOP FIXES (estimated impact):\n1. [+12] Add eval-suite.json — unlocks triggers, quality, edges dimensions\n2. [+8]  Fix contradiction: line 12 'always' vs line 45 'never' on same action\n3. [+5]  Remove 3 hedging phrases (you might want to, consider possibly)"
+      },
+      {
+        "task": "T8: Tests for T2-T7",
+        "effort": "4h",
+        "description": "P0 tests only: format detection (5), backward compat golden (1), --url security (2), compare output (1), suggest ranking (1). Total: 10 new tests."
+      }
+    ],
+    "S1_total": "15h",
+
+    "S2_security": [
+      {
+        "task": "T9: scoring/security.py — pattern engine",
+        "effort": "6h",
+        "description": "New file. 10 regex patterns (not 16). Deductive scoring (100 minus penalties). Categories: injection(2), exfil(2), dangerous_cmd(1), obfuscation(3), overpermission(1), boundaries(1 bonus)."
+      },
+      {
+        "task": "T10: False-positive mitigation",
+        "effort": "4h",
+        "description": "Code-block exclusion, meta-discourse detection (90% reduction for security-domain skills), negation-aware matching ('never run rm -rf' = safe). Graduated cap (security <20 → composite max 60, <10 → max 40, <5 → max 20)."
+      },
+      {
+        "task": "T11: Security tests",
+        "effort": "3h",
+        "description": "P0: benign=100, malicious=0, shieldclaw no FP, code-block excluded, cap works. P1: api-backend no FP, meta-discourse halves, zero-width threshold. 5 golden files."
+      },
+      {
+        "task": "T12: scoring/patterns.py — security patterns",
+        "effort": "2h",
+        "description": "Add _RE_SEC_* patterns to patterns.py. 10 patterns total with specific regex."
+      }
+    ],
+    "S2_total": "15h",
+
+    "S3_web": [
+      {
+        "task": "T13: Web Playground scaffold",
+        "effort": "6h",
+        "description": "Separate deployment (schliff.dev or play.schliff.dev). Serverless Python endpoint: POST /api/score with content body, returns JSON score. Pre-loaded demo examples. Dark mode."
+      },
+      {
+        "task": "T14: GitHub Action",
+        "effort": "4h",
+        "description": "action.yml with python setup, pip install schliff, score + PR comment. Publish to GitHub Marketplace."
+      }
+    ],
+    "S3_total": "10h"
+  },
+
+  "week_2": {
+    "theme": "Integration + Polish",
+    "S1": [
+      {
+        "task": "T15: Doctor multi-format extension",
+        "effort": "3h",
+        "description": "Extend skill_mesh.discover_skills() to find CLAUDE.md, .cursorrules, AGENTS.md. Doctor shows 'Project Instruction Files' section with partial scoring."
+      },
+      {
+        "task": "T16: schliff report --gist",
+        "effort": "4h",
+        "description": "Generate markdown report, upload as GitHub Gist via API. Returns gist URL. Shareable 'Skill Quality Passport'."
+      },
+      {
+        "task": "T17: CLI integration for security",
+        "effort": "2h",
+        "description": "Wire security into cli.py: --security flag, composite integration via scoring/__init__.py"
+      }
+    ],
+    "S2": [
+      {
+        "task": "T18: Security rebase + integration",
+        "effort": "3h",
+        "description": "Rebase feat/v7-security on main (with multi-format merged). Add security weight to composite.py. Wire into build_scores()."
+      },
+      {
+        "task": "T19: Leaderboard scaffold",
+        "effort": "8h",
+        "description": "skills.schliff.dev — static site + serverless API. schliff score --submit opt-in. Top skills, most improved, recent."
+      }
+    ],
+    "S3": [
+      {
+        "task": "T20: Playground frontend + polish",
+        "effort": "6h",
+        "description": "Shareable URLs, pre-loaded examples (ShieldClaw before/after), mobile responsive"
+      },
+      {
+        "task": "T21: Full regression suite",
+        "effort": "4h",
+        "description": "Run all 540+ existing tests. Add P1 tests (13 more). Hypothesis crash-safety tests. Target: 580+ total."
+      }
+    ]
+  },
+
+  "week_3_4": {
+    "theme": "Release + Launch",
+    "tasks": [
+      "Merge all branches to main (serialized order)",
+      "Version bump to 7.0.0 in pyproject.toml",
+      "CHANGELOG v7.0 entry",
+      "README update with new features + examples",
+      "PyPI publish",
+      "GitHub Release with structured body",
+      "Playground deployment (schliff.dev)",
+      "Leaderboard deployment (skills.schliff.dev)",
+      "Show HN update post / follow-up thread",
+      "Reddit r/ClaudeAI + r/Python announcement"
+    ]
+  },
+
+  "new_features_added": {
+    "schliff_compare": {
+      "command": "schliff compare skill1.md skill2.md",
+      "description": "Side-by-side quality comparison with dimension deltas",
+      "effort": "3h",
+      "virality": "4/5 — competitive comparison dynamic"
+    },
+    "schliff_suggest": {
+      "command": "schliff suggest path/to/SKILL.md",
+      "description": "Ranked actionable fixes with estimated score impact",
+      "effort": "2h",
+      "virality": "3/5 — transforms judge to coach, high retention"
+    },
+    "schliff_report_gist": {
+      "command": "schliff report --gist path/to/SKILL.md",
+      "description": "Generate shareable GitHub Gist with full score report",
+      "effort": "4h",
+      "virality": "5/5 — skill quality passport"
+    }
+  },
+
+  "test_matrix_summary": {
+    "P0_must_have": 15,
+    "P1_should_have": 13,
+    "P2_nice_to_have": 6,
+    "total_new": 34,
+    "target_total": "580+",
+    "critical_first_step": "Capture v630_baseline.json BEFORE any code changes"
+  },
+
+  "what_was_simplified": [
+    "FormatProfile dataclass → normalize_content() function (350 LOC → 40 LOC)",
+    "6 scorer modifications → 0 scorer modifications",
+    "16 security patterns → 10 high-signal patterns",
+    "2 new batch modules (discovery.py + batch.py) → extend existing doctor.py",
+    "Per-format composite weights → universal weights (v7.1 for per-format)",
+    "schliff score <dir> → schliff doctor <dir> (already exists)",
+    "Binary security cap (score<30→40) → graduated cap (20/10/5 thresholds)"
+  ],
+
+  "what_was_added": [
+    "schliff compare (high-virality competitive comparison)",
+    "schliff suggest (judge → coach transformation)",
+    "schliff report --gist (shareable quality passport)",
+    "Negation-aware security matching",
+    "HTML comment injection pattern",
+    "Unicode Bidi override pattern",
+    "Hypothesis crash-safety tests"
+  ]
+}
