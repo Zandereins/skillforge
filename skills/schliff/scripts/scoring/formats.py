@@ -43,14 +43,28 @@ def normalize_content(content: str, fmt: str) -> str:
     fmt is "skill.md", return content unchanged. Otherwise wrap the content
     in synthetic YAML frontmatter so the scoring engine can process it.
     """
-    if fmt == FORMAT_SKILL_MD or content.startswith("---"):
+    if fmt == FORMAT_SKILL_MD:
         return content
+    # Only treat as existing frontmatter if properly closed (--- ... ---)
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end >= 4:
+            return content
 
     name = _extract_name(content)
     desc = _extract_description(content, name)
 
-    header = f"---\nname: {name}\ndescription: {desc}\n---\n\n"
+    header = f"---\nname: {_yaml_safe(name)}\ndescription: {_yaml_safe(desc)}\n---\n\n"
     return header + content
+
+
+def _yaml_safe(value: str) -> str:
+    """Escape a value for safe YAML scalar embedding."""
+    if any(c in value for c in (':', '#', '{', '}', '[', ']', ',', '&', '*',
+                                 '?', '|', '>', '!', "'", '"', '\n')):
+        escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+        return f'"{escaped}"'
+    return value
 
 
 def _extract_name(content: str) -> str:
@@ -71,6 +85,7 @@ def _extract_name(content: str) -> str:
 def _extract_description(content: str, name: str) -> str:
     """Extract a description from the first paragraph after any heading."""
     lines = content.splitlines()
+    has_heading = bool(_RE_H1.search(content))
     past_heading = False
     paragraph: list[str] = []
 
@@ -79,7 +94,7 @@ def _extract_description(content: str, name: str) -> str:
         if stripped.startswith("#"):
             past_heading = True
             continue
-        if past_heading or not _RE_H1.search(content):
+        if past_heading or not has_heading:
             if stripped:
                 paragraph.append(stripped)
             elif paragraph:

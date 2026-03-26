@@ -5,7 +5,6 @@ Regression guard: SKILL.md scores must remain identical to the v6.3.0 baseline.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -61,41 +60,29 @@ def test_skill_md_dimensions_identical_to_baseline():
 # Normalization: non-SKILL.md formats get synthetic frontmatter injected
 # ---------------------------------------------------------------------------
 
-def test_build_scores_with_claude_md_does_not_crash():
+def test_build_scores_with_claude_md_does_not_crash(tmp_path):
     """build_scores() must handle a CLAUDE.md-shaped file without raising."""
     content = "# My AI Rules\n\nAlways be helpful. Do not hallucinate.\n"
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix="CLAUDE.md", delete=False, encoding="utf-8"
-    ) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    claude_file = tmp_path / "CLAUDE.md"
+    claude_file.write_text(content, encoding="utf-8")
 
-    try:
-        scores = build_scores(tmp_path)
-        # Must return a dict with the standard dimensions
-        for dim in ("structure", "triggers", "quality", "edges",
-                    "efficiency", "composability", "clarity"):
-            assert dim in scores, f"dimension '{dim}' missing for CLAUDE.md input"
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+    scores = build_scores(str(claude_file))
+    # Must return a dict with the standard dimensions
+    for dim in ("structure", "triggers", "quality", "edges",
+                "efficiency", "composability", "clarity"):
+        assert dim in scores, f"dimension '{dim}' missing for CLAUDE.md input"
 
 
-def test_build_scores_with_cursorrules_does_not_crash():
+def test_build_scores_with_cursorrules_does_not_crash(tmp_path):
     """build_scores() must handle a .cursorrules-shaped file without raising."""
     content = "# Cursor Rules\n\nUse TypeScript. Prefer functional style.\n"
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".cursorrules", delete=False, encoding="utf-8"
-    ) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    rules_file = tmp_path / ".cursorrules"
+    rules_file.write_text(content, encoding="utf-8")
 
-    try:
-        scores = build_scores(tmp_path)
-        for dim in ("structure", "triggers", "quality", "edges",
-                    "efficiency", "composability", "clarity"):
-            assert dim in scores, f"dimension '{dim}' missing for .cursorrules input"
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+    scores = build_scores(str(rules_file))
+    for dim in ("structure", "triggers", "quality", "edges",
+                "efficiency", "composability", "clarity"):
+        assert dim in scores, f"dimension '{dim}' missing for .cursorrules input"
 
 
 def test_build_scores_skill_md_path_unchanged():

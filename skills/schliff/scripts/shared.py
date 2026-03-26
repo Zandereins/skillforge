@@ -166,18 +166,18 @@ def build_scores(skill_path: str, eval_suite: Optional[dict] = None,
     if fmt is None:
         fmt = detect_format(skill_path)
     tmp_path: Optional[str] = None
-    if fmt != "skill.md":
-        content = read_skill_safe(skill_path)
-        normalized = normalize_content(content, fmt)
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", delete=False, encoding="utf-8"
-        )
-        tmp.write(normalized)
-        tmp.close()
-        tmp_path = tmp.name
-        skill_path = tmp_path  # scorers now see normalized content
-
     try:
+        if fmt != "skill.md":
+            content = read_skill_safe(skill_path)
+            normalized = normalize_content(content, fmt)
+            tmp = tempfile.NamedTemporaryFile(
+                mode="w", suffix=".md", delete=False, encoding="utf-8"
+            )
+            tmp.write(normalized)
+            tmp.close()
+            tmp_path = tmp.name
+            skill_path = tmp_path  # scorers now see normalized content
+
         # Lazy imports to avoid circular deps and keep CLI startup fast
         from scoring import (
             score_structure, score_triggers, score_efficiency,
@@ -200,7 +200,10 @@ def build_scores(skill_path: str, eval_suite: Optional[dict] = None,
             scores["runtime"] = score_runtime(skill_path, eval_suite, enabled=False)
     finally:
         if tmp_path is not None:
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
     return scores
 
@@ -295,6 +298,19 @@ def load_jsonl_safe(path: str | Path, max_size: int = 10_000_000) -> list[dict]:
     return results
 
 
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate scheme and host on every redirect hop to prevent SSRF."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urllib.parse.urlparse(newurl)
+        if parsed.scheme != "https":
+            raise ValueError(f"Redirect to non-HTTPS blocked: {newurl}")
+        host = (parsed.hostname or "").lower()
+        if host not in _URL_ALLOWED_HOSTS:
+            raise ValueError(f"Redirect to disallowed host blocked: {host}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def fetch_url_safe(url: str, max_bytes: int = 500_000) -> str:
     """Fetch a URL safely with security restrictions.
 
@@ -312,10 +328,10 @@ def fetch_url_safe(url: str, max_bytes: int = 500_000) -> str:
             f"Only HTTPS URLs are allowed (got scheme '{parsed.scheme}'): {url}"
         )
 
-    host = parsed.netloc.lower()
-    # Strip port if present (e.g. raw.githubusercontent.com:443)
-    if ":" in host:
-        host = host.split(":")[0]
+    host = parsed.hostname
+    if host is None:
+        raise ValueError(f"No hostname in URL: {url}")
+    host = host.lower()
 
     if host not in _URL_ALLOWED_HOSTS:
         raise ValueError(
@@ -323,8 +339,10 @@ def fetch_url_safe(url: str, max_bytes: int = 500_000) -> str:
             f"({', '.join(sorted(_URL_ALLOWED_HOSTS))}): {url}"
         )
 
+    # Use a custom opener that re-validates scheme + host on every redirect
+    opener = urllib.request.build_opener(_SafeRedirectHandler)
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
+        with opener.open(url, timeout=10) as response:  # noqa: S310
             # Honour Content-Length if present to avoid reading oversized responses
             content_length = response.headers.get("Content-Length")
             if content_length is not None and int(content_length) > max_bytes:

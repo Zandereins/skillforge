@@ -129,15 +129,16 @@ def cmd_score(args: argparse.Namespace) -> None:
                     skill_path, eval_suite, include_clarity=True,
                 )
                 fix_count = len(gradients)
-            except Exception:
+            except Exception as exc:
+                print(f"Warning: could not compute fix count: {exc}", file=sys.stderr)
                 fix_count = 0
 
             # Get version
             try:
-                from importlib.metadata import version
+                from importlib.metadata import version, PackageNotFoundError
                 ver = version("schliff")
-            except Exception:
-                ver = "6.3.0"
+            except PackageNotFoundError:
+                ver = "dev"
 
             output = format_score_display(
                 scores=scores,
@@ -284,7 +285,7 @@ This skill probably helps with deployment. You might want to use it when deployi
 
         # Reuse cmd_score logic
         import argparse as _ap
-        fake_args = _ap.Namespace(skill_path=skill_path, json=False, eval_suite=None)
+        fake_args = _ap.Namespace(skill_path=skill_path, json=False, eval_suite=None, url=None, format=None)
         cmd_score(fake_args)
 
     print("\n  This is a deliberately bad skill. Try schliff on your own skills!")
@@ -527,7 +528,7 @@ def cmd_suggest(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     eval_suite = _load_eval_suite_from_args(args)
-    top_n = args.top
+    top_n = max(1, args.top)
 
     # Compute current score
     scores = build_scores(args.skill_path, eval_suite, include_runtime=True)
@@ -602,10 +603,10 @@ def cmd_suggest(args: argparse.Namespace) -> None:
 def cmd_version(_args: argparse.Namespace) -> None:
     """Print version string."""
     try:
-        from importlib.metadata import version
+        from importlib.metadata import version, PackageNotFoundError
         print(f"schliff {version('schliff')}")
-    except Exception:
-        print("schliff 6.3.0")
+    except PackageNotFoundError:
+        print("schliff dev")
 
 
 def main():
