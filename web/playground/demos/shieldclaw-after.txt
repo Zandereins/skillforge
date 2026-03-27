@@ -1,0 +1,41 @@
+---
+name: shieldclaw
+description: >
+  Automated security scanner for code repositories. Detects hardcoded secrets,
+  dependency vulnerabilities, injection risks, and auth misconfigurations.
+  Trigger: "scan for security", "security audit", "find vulnerabilities",
+  "check secrets". Do NOT use for penetration testing or network scanning.
+---
+
+# ShieldClaw — Repository Security Scanner
+
+Zero-config security scanning with deterministic rules and actionable fixes.
+
+## Quick Start
+
+```bash
+/shieldclaw
+Target: ./src
+Depth: full (default) | quick | secrets-only
+```
+
+## What It Scans
+
+| Category | Detection | Fix Provided |
+|----------|-----------|-------------|
+| Hardcoded secrets | API keys, tokens, passwords in source | Yes — env var migration |
+| Dependencies | Known CVEs via advisory databases | Yes — upgrade commands |
+| Injection | SQL, XSS, command injection patterns | Yes — parameterized alternatives |
+| Auth | Missing auth checks, weak session config | Yes — middleware patterns |
+
+## When NOT to Use
+
+- Network penetration testing → use dedicated pentest tools
+- Runtime behavior analysis → use DAST tools
+- Compliance auditing → use compliance-specific frameworks
+
+## Error Handling
+
+- Binary too large (>100MB): skip with warning, suggest .shieldclawignore
+- Unsupported language: report partial coverage, list supported languages
+- Network timeout on CVE lookup: use cached advisory DB, warn about staleness

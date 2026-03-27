@@ -1,0 +1,42 @@
+[
+  {
+    "skill_name": "schliff",
+    "repo_url": "https://github.com/franzundfranz/schliff",
+    "format": "SKILL.md",
+    "composite": 99.0,
+    "grade": "S",
+    "dimensions": {
+      "structure": 100,
+      "triggers": 100,
+      "quality": 96,
+      "edges": 100,
+      "efficiency": 100,
+      "composability": 100,
+      "clarity": 100,
+      "security": 95,
+      "sync": 100
+    },
+    "version": "7.0.0",
+    "submitted_at": "2026-03-25T10:00:00Z"
+  },
+  {
+    "skill_name": "shieldclaw",
+    "repo_url": "https://github.com/example/shieldclaw",
+    "format": "SKILL.md",
+    "composite": 94.6,
+    "grade": "A",
+    "dimensions": {
+      "structure": 95,
+      "triggers": 92,
+      "quality": 94,
+      "edges": 96,
+      "efficiency": 93,
+      "composability": 95,
+      "clarity": 96,
+      "security": 90,
+      "sync": 100
+    },
+    "version": "2.1.0",
+    "submitted_at": "2026-03-24T15:30:00Z"
+  }
+]

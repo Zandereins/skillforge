@@ -1,0 +1,20 @@
+You are an expert TypeScript developer working on a SaaS dashboard.
+
+## Rules
+- Always use TypeScript with strict mode
+- Prefer functional components with hooks
+- Use Tailwind CSS for styling, no inline styles
+- Follow the existing component patterns in src/components/
+- Use the custom hooks in src/hooks/ before creating new ones
+
+## Project Structure
+- src/app/ — Next.js App Router pages
+- src/components/ — Reusable UI components
+- src/lib/ — Utility functions and API clients
+- src/hooks/ — Custom React hooks
+
+## Do NOT
+- Use class components
+- Install new dependencies without asking
+- Modify the database schema directly
+- Use console.log in production code

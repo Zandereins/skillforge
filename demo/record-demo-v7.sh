@@ -43,3 +43,10 @@ sleep 0.8
 $CLI suggest demo/bad-skill/SKILL.md --top 5 2>/dev/null || true
 printf '\n'
 sleep 3
+
+# ── Scene 6: Sync check across directory ──────────────────────────────
+printf '\033[1;36m$ schliff sync demo/sync-conflict/\033[0m\n\n'
+sleep 0.8
+$CLI sync demo/sync-conflict/ 2>/dev/null || true
+printf '\n'
+sleep 3

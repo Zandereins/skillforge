@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schliff Playground — AI Agent Instruction Scorer</title>
+<meta name="description" content="Score any SKILL.md, CLAUDE.md, or .cursorrules file — instant, deterministic, free.">
+<meta property="og:title" content="Schliff Playground">
+<meta property="og:description" content="Score any AI agent instruction file across 9 dimensions — instant, deterministic, free.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Schliff Playground">
+<meta name="twitter:description" content="Score any AI agent instruction file across 9 dimensions.">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ── Color tokens ── */
+  :root {
+    --bg: #0d1117;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --border: #21262d;
+    --border-subtle: #30363d;
+    --surface: #161b22;
+    --surface-2: #1c2128;
+    --gradient: linear-gradient(135deg, #38bdf8, #a855f7);
+    --accent-bar: linear-gradient(90deg, #38bdf8, #a855f7, #34d399);
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --radius-card: 14px;
+    --radius-pill: 20px;
+    --radius-sm: 5px;
+    --score-s: #34d399;
+    --score-a: #38bdf8;
+    --score-b: #a78bfa;
+    --score-c: #f59e0b;
+    --score-d: #f87171;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3);
+    --transition: 0.15s ease;
+  }
+
+  /* ── Light mode ── */
+  [data-theme="light"] {
+    --bg: #ffffff;
+    --text: #1f2328;
+    --muted: #656d76;
+    --border: #d0d7de;
+    --border-subtle: #c6cdd4;
+    --surface: #f6f8fa;
+    --surface-2: #eaeef2;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+  }
+
+  html { height: 100%; }
+
+  body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    transition: background var(--transition), color var(--transition);
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99,102,106,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,102,106,0.06) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Glows ── */
+  .glow-tl {
+    position: fixed;
+    top: -120px;
+    left: -120px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .glow-br {
+    position: fixed;
+    bottom: -100px;
+    right: -100px;
+    width: 450px;
+    height: 450px;
+    background: radial-gradient(circle, rgba(168,85,247,0.07) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── App shell ── */
+  #app {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Bottom accent bar ── */
+  .bottom-accent {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--accent-bar);
+    z-index: 100;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 20px 24px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .brand-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--gradient);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    box-shadow: 0 0 20px rgba(56,189,248,0.2), 0 0 40px rgba(168,85,247,0.1);
+  }
+
+  .brand-text h1 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+  }
+
+  .brand-text p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* ── Theme toggle ── */
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color var(--transition), color var(--transition), background var(--transition);
+    flex-shrink: 0;
+  }
+  .btn-icon:hover {
+    border-color: var(--border-subtle);
+    color: var(--text);
+  }
+  .btn-icon svg { width: 16px; height: 16px; }
+
+  /* ── Main layout ── */
+  main {
+    flex: 1;
+    padding: 20px 24px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* ── Panel cards ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    min-height: 520px;
+  }
+
+  .panel-header {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .panel-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+  }
+
+  .panel-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border: 1px solid transparent;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+
+  .badge-format {
+    background: rgba(56,189,248,0.1);
+    border-color: rgba(56,189,248,0.25);
+    color: #38bdf8;
+  }
+
+  /* ── Selects / dropdowns ── */
+  select {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color var(--transition);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px;
+  }
+  select:focus { border-color: #38bdf8; }
+  select option { background: var(--surface); }
+
+  /* ── Textarea ── */
+  .editor-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 0;
+  }
+
+  #content-input {
+    flex: 1;
+    width: 100%;
+    min-height: 360px;
+    resize: none;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    padding: 14px 16px;
+    tab-size: 2;
+    caret-color: #38bdf8;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+  }
+
+  #content-input::placeholder { color: var(--muted); font-style: italic; }
+
+  /* ── Footer of editor panel ── */
+  .editor-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .char-count {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .char-count.warn { color: #f59e0b; }
+  .char-count.error { color: #f87171; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: opacity var(--transition), filter var(--transition), border-color var(--transition);
+    min-height: 36px;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--gradient);
+    color: #fff;
+    border: none;
+    min-width: 100px;
+  }
+  .btn-primary:not(:disabled):hover { filter: brightness(1.1); }
+
+  .btn-secondary {
+    background: var(--surface-2);
+    border-color: var(--border);
+    color: var(--text);
+  }
+  .btn-secondary:not(:disabled):hover { border-color: var(--border-subtle); }
+
+  .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ── Spinner inside btn ── */
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Results panel ── */
+  .results-body {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--muted);
+  }
+
+  .empty-state svg {
+    width: 40px;
+    height: 40px;
+    opacity: 0.35;
+  }
+
+  .empty-state p {
+    font-size: 13px;
+    max-width: 220px;
+    line-height: 1.5;
+  }
+
+  /* ── Error banner ── */
+  .error-banner {
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.3);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    color: #f87171;
+  }
+  .error-banner-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+  .error-banner-text { flex: 1; }
+  .error-banner-retry {
+    background: rgba(248,113,113,0.15);
+    border: 1px solid rgba(248,113,113,0.3);
+    border-radius: var(--radius-sm);
+    color: #f87171;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-family: var(--sans);
+    white-space: nowrap;
+    align-self: center;
+    flex-shrink: 0;
+    transition: background var(--transition);
+  }
+  .error-banner-retry:hover { background: rgba(248,113,113,0.25); }
+
+  /* ── Score hero ── */
+  .score-hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--surface-2);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--border);
+  }
+
+  .score-number-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 72px;
+  }
+
+  .score-big {
+    font-family: var(--mono);
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: -2px;
+    line-height: 1;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .grade-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .grade-S { background: #34d399; box-shadow: 0 0 12px rgba(52,211,153,0.4); }
+  .grade-A { background: #38bdf8; box-shadow: 0 0 12px rgba(56,189,248,0.4); }
+  .grade-B { background: #a78bfa; box-shadow: 0 0 12px rgba(167,139,250,0.4); }
+  .grade-C { background: #f59e0b; box-shadow: 0 0 12px rgba(245,158,11,0.4); }
+  .grade-D { background: #f87171; box-shadow: 0 0 12px rgba(248,113,113,0.4); }
+
+  .score-meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .score-bar-track {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--gradient);
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 8px rgba(56,189,248,0.3);
+  }
+
+  .score-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── Dimensions ── */
+  .dimensions-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dimensions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dim-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 40px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dim-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dim-track {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .dim-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .dim-value {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-align: right;
+    color: var(--text);
+  }
+
+  .dim-fill-high { background: #34d399; }
+  .dim-fill-good { background: #38bdf8; }
+  .dim-fill-mid  { background: #a78bfa; }
+  .dim-fill-low  { background: #f59e0b; }
+  .dim-fill-poor { background: #f87171; }
+
+  /* ── Results footer ── */
+  .results-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 8px 18px;
+    font-size: 13px;
+    color: var(--text);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 767px) {
+    main {
+      grid-template-columns: 1fr;
+      padding: 12px 12px 48px;
+      gap: 12px;
+    }
+
+    header { padding: 14px 12px 0; }
+
+    .brand-text p { display: none; }
+
+    #content-input { min-height: 220px; }
+
+    .panel { min-height: auto; }
+
+    .dim-row { grid-template-columns: 90px 1fr 36px; }
+
+    .btn { min-height: 44px; }
+
+    select { min-height: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow-tl" aria-hidden="true"></div>
+<div class="glow-br" aria-hidden="true"></div>
+<div class="bottom-accent" aria-hidden="true"></div>
+
+<div id="app">
+  <header>
+    <div class="header-brand">
+      <div class="brand-icon" aria-hidden="true">S</div>
+      <div class="brand-text">
+        <h1>Schliff Playground</h1>
+        <p>Score any SKILL.md, CLAUDE.md, or .cursorrules file — instant, deterministic, free</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <a href="/leaderboard/" class="nav-link" style="color:var(--muted);font-size:13px;text-decoration:none;">Leaderboard</a>
+      <a href="https://github.com/franzundfranz/schliff" class="nav-link" target="_blank" rel="noopener" style="color:var(--muted);font-size:13px;text-decoration:none;">GitHub</a>
+      <button class="btn-icon" id="theme-toggle" aria-label="Toggle theme" title="Toggle dark/light mode"></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Editor panel ── -->
+    <section class="panel" aria-label="Input editor">
+      <div class="panel-header">
+        <span class="panel-title">Input</span>
+        <div class="panel-controls">
+          <span class="badge badge-format" id="format-badge" aria-live="polite">—</span>
+          <select id="example-select" aria-label="Load example file">
+            <option value="">Load Example...</option>
+            <option value="bad-skill.txt">Bad Skill Example</option>
+            <option value="good-skill.txt">Good Skill Example</option>
+            <option value="sample-claude.txt">CLAUDE.md Example</option>
+            <option value="sample-cursorrules.txt">.cursorrules Example</option>
+            <option value="shieldclaw-before.txt">ShieldClaw Before</option>
+            <option value="shieldclaw-after.txt">ShieldClaw After</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="editor-wrap">
+        <textarea
+          id="content-input"
+          spellcheck="false"
+          autocorrect="off"
+          autocapitalize="off"
+          placeholder="Paste your SKILL.md, CLAUDE.md, .cursorrules, or AGENTS.md here..."
+          aria-label="Instruction file content"
+        ></textarea>
+      </div>
+
+      <div class="editor-footer">
+        <span class="char-count" id="char-count" aria-live="polite">0 chars</span>
+        <button class="btn btn-primary" id="score-btn" aria-label="Score the current content">Score File</button>
+      </div>
+    </section>
+
+    <!-- ── Results panel ── -->
+    <section class="panel" aria-label="Scoring results">
+      <div class="panel-header">
+        <span class="panel-title">Results</span>
+        <div class="panel-controls" id="results-actions" style="display:none;">
+          <button class="btn btn-secondary" id="copy-btn" aria-label="Copy results as text">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <rect x="5" y="5" width="8" height="9" rx="1.5"/>
+              <path d="M3 11V3a1 1 0 011-1h8" stroke-linecap="round"/>
+            </svg>
+            Copy
+          </button>
+          <button class="btn btn-secondary" id="share-btn" aria-label="Copy shareable link">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <circle cx="12" cy="3" r="1.5"/>
+              <circle cx="3" cy="8" r="1.5"/>
+              <circle cx="12" cy="13" r="1.5"/>
+              <path d="M4.5 7.25l6-3.5M4.5 8.75l6 3.5" stroke-linecap="round"/>
+            </svg>
+            Share
+          </button>
+        </div>
+      </div>
+
+      <div class="results-body" id="results-body">
+        <!-- empty state rendered by JS -->
+      </div>
+
+      <div class="results-footer" id="results-footer" style="display:none;">
+        <span style="font-size:11px;color:var(--muted);" id="results-meta"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- SVG sprite — static markup only, no user data -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="icon-doc" viewBox="0 0 40 40" fill="none">
+    <rect x="6" y="6" width="28" height="28" rx="4" stroke="currentColor" stroke-width="1.5"/>
+    <path d="M12 15h16M12 20h12M12 25h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-sun" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="3"/>
+    <path stroke-linecap="round" d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.4 3.4l.7.7M11.9 11.9l.7.7M11.9 4.1l-.7.7M4.1 11.9l-.7.7"/>
+  </symbol>
+  <symbol id="icon-moon" viewBox="0 0 16 16" fill="none">
+    <path d="M13 10A6 6 0 016 3a6 6 0 100 10 6 6 0 007-3z" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-alert" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="6.5"/>
+    <path d="M8 5v3.5" stroke-linecap="round"/>
+    <circle cx="8" cy="11" r="0.5" fill="currentColor" stroke="none"/>
+  </symbol>
+</svg>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Constants ──────────────────────────────────────────────────────────────
+  var MAX_BYTES  = 50 * 1024;
+  var WARN_BYTES = 40 * 1024;
+
+  var DIMENSIONS = [
+    'Structure', 'Triggers', 'Quality', 'Edges',
+    'Efficiency', 'Composability', 'Clarity', 'Security', 'Sync',
+  ];
+
+  var WEIGHTS = {
+    Structure: 0.15, Triggers: 0.10, Quality: 0.15, Edges: 0.10,
+    Efficiency: 0.10, Composability: 0.10, Clarity: 0.15, Security: 0.10, Sync: 0.05,
+  };
+
+  // ── DOM refs ───────────────────────────────────────────────────────────────
+  var textarea       = document.getElementById('content-input');
+  var charCount      = document.getElementById('char-count');
+  var formatBadge    = document.getElementById('format-badge');
+  var scoreBtn       = document.getElementById('score-btn');
+  var exampleSelect  = document.getElementById('example-select');
+  var resultsBody    = document.getElementById('results-body');
+  var resultsFooter  = document.getElementById('results-footer');
+  var resultsMeta    = document.getElementById('results-meta');
+  var resultsActions = document.getElementById('results-actions');
+  var copyBtn        = document.getElementById('copy-btn');
+  var shareBtn       = document.getElementById('share-btn');
+  var themeToggle    = document.getElementById('theme-toggle');
+  var toastEl        = document.getElementById('toast');
+
+  // ── SVG helper (safe static references only) ───────────────────────────────
+  function makeSvgUse(symbolId, cls) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true');
+    if (cls) svg.setAttribute('class', cls);
+    var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', '#' + symbolId);
+    use.setAttribute('href', '#' + symbolId);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  // ── Theme ──────────────────────────────────────────────────────────────────
+  var THEME_KEY = 'schliff-theme';
+
+  function getPreferredTheme() {
+    var stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'light' || stored === 'dark') return stored;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    renderThemeIcon(theme);
+  }
+
+  function renderThemeIcon(theme) {
+    while (themeToggle.firstChild) themeToggle.removeChild(themeToggle.firstChild);
+    var svgIcon = makeSvgUse(theme === 'light' ? 'icon-sun' : 'icon-moon');
+    svgIcon.style.width = '16px';
+    svgIcon.style.height = '16px';
+    svgIcon.querySelector('use').setAttribute('stroke', 'currentColor');
+    svgIcon.setAttribute('fill', 'none');
+    svgIcon.style.stroke = 'currentColor';
+    themeToggle.appendChild(svgIcon);
+  }
+
+  themeToggle.addEventListener('click', function () {
+    var current = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
+  applyTheme(getPreferredTheme());
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  var toastTimer = null;
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2400);
+  }
+
+  // ── Format detection ───────────────────────────────────────────────────────
+  function detectFormat(text) {
+    if (!text.trim()) return '—';
+    var t = text.trim();
+    if (t.startsWith('---')) return 'SKILL.md';
+    if (/^(rules:|instructions:|# Rules|You are)/i.test(t)) return '.cursorrules';
+    if (/claude/i.test(t.slice(0, 400))) return 'CLAUDE.md';
+    return 'AGENTS.md';
+  }
+
+  // ── Char count & validation ────────────────────────────────────────────────
+  function byteLength(str) {
+    return new TextEncoder().encode(str).length;
+  }
+
+  function updateMeta() {
+    var text  = textarea.value;
+    var bytes = byteLength(text);
+    var chars = text.length;
+
+    var sizeLabel = chars < 1000
+      ? chars + ' chars'
+      : (chars / 1000).toFixed(1) + 'k chars';
+    if (bytes >= 1024) sizeLabel += ' \u00B7 ' + (bytes / 1024).toFixed(1) + ' KB';
+
+    charCount.textContent = sizeLabel;
+    charCount.className = 'char-count';
+
+    if (bytes > MAX_BYTES) {
+      charCount.classList.add('error');
+      scoreBtn.disabled = true;
+    } else if (bytes > WARN_BYTES) {
+      charCount.classList.add('warn');
+      scoreBtn.disabled = false;
+    } else {
+      scoreBtn.disabled = false;
+    }
+
+    var fmt = detectFormat(text);
+    formatBadge.textContent = fmt;
+  }
+
+  textarea.addEventListener('input', updateMeta);
+
+  // ── Heuristic scorer ───────────────────────────────────────────────────────
+  function scoreContent(text) {
+    var words  = text.split(/\s+/).filter(Boolean).length;
+
+    var hasFrontmatter   = /^---[\s\S]+?---/m.test(text);
+    var sections         = text.match(/^#{1,3} .+/gm) || [];
+    var sectionCount     = sections.length;
+    var hasCodeBlocks    = /```/.test(text);
+    var hasBullets       = /^\s*[-*\u2022] /m.test(text);
+    var hasNumberedSteps = /^\s*\d+\. /m.test(text);
+    var hasExamples      = /example|e\.g\.|for instance|such as/i.test(text);
+    var hasConstraints   = /must not|never|always|required|forbidden|constraint|limit/i.test(text);
+    var hasTriggers      = /trigger|when to use|use this when|invoke when/i.test(text);
+    var hasNegTriggers   = /do not use|avoid|not suitable|don't use/i.test(text);
+    var hasErrorHandling = /error|fallback|exception|fail|retry|recover/i.test(text);
+    var hasEdgeCases     = /edge case|corner case|if .* is empty|if .* missing|when .* unavailable/i.test(text);
+    var vagueWords       = (text.match(/\b(probably|maybe|might|perhaps|could be|sort of|kind of)\b/gi) || []).length;
+    var hasSecurity      = /security|safe|unsafe|sanitize|validate|injection|xss|auth|permission/i.test(text);
+    var hasDoNotRules    = /do not|don't|never|avoid|must not/i.test(text);
+    var mentionsTools    = /uses:|requires:|depends on:|skill:|tool:|agent:|workflow:/i.test(text);
+    var hasInputOutput   = /input|output|returns|parameter|argument|result/i.test(text);
+
+    // Repetition ratio
+    var sentences = text.match(/[^.!?]+[.!?]/g) || [];
+    var uniqueSentences = {};
+    sentences.forEach(function (s) { uniqueSentences[s.trim().toLowerCase()] = true; });
+    var uniqueCount = Object.keys(uniqueSentences).length;
+    var repetitionRatio = sentences.length > 0 ? uniqueCount / sentences.length : 1;
+
+    // Structure
+    var structure = 0;
+    if (hasFrontmatter)    structure += 20;
+    if (sectionCount > 0)  structure += 20;
+    if (sectionCount > 3)  structure += 20;
+    if (hasCodeBlocks)     structure += 20;
+    if (text.length > 500) structure += 20;
+    structure = Math.min(100, structure);
+
+    // Triggers
+    var triggers = 0;
+    if (hasTriggers)    triggers += 50;
+    if (hasNegTriggers) triggers += 50;
+    triggers = Math.min(100, triggers);
+
+    // Quality
+    var quality = 30;
+    if (hasExamples)    quality += 30;
+    if (hasConstraints) quality += 30;
+    if (words > 200)    quality += 20;
+    quality -= vagueWords * 20;
+    quality = Math.max(0, Math.min(100, quality));
+
+    // Edges
+    var edges = 0;
+    if (hasErrorHandling) edges += 50;
+    if (hasEdgeCases)     edges += 50;
+    edges = Math.min(100, edges);
+
+    // Efficiency
+    var efficiency = 0;
+    if (repetitionRatio > 0.85)    efficiency += 50;
+    if (words > 0 && words < 5000) efficiency += 50;
+    efficiency = Math.min(100, efficiency);
+
+    // Composability
+    var composability = 0;
+    if (mentionsTools)   composability += 50;
+    if (hasInputOutput)  composability += 50;
+    composability = Math.min(100, composability);
+
+    // Clarity
+    var clarity = 0;
+    if (hasNumberedSteps) clarity += 30;
+    if (hasBullets)       clarity += 30;
+    if (sectionCount > 0) clarity += 40;
+    clarity = Math.min(100, clarity);
+
+    // Security
+    var security = 0;
+    if (hasSecurity)   security += 50;
+    if (hasDoNotRules) security += 50;
+    security = Math.min(100, security);
+
+    // Sync — always 100 for playground
+    var sync = 100;
+
+    var scores = {
+      Structure: structure,
+      Triggers: triggers,
+      Quality: quality,
+      Edges: edges,
+      Efficiency: efficiency,
+      Composability: composability,
+      Clarity: clarity,
+      Security: security,
+      Sync: sync,
+    };
+
+    var composite = 0;
+    DIMENSIONS.forEach(function (dim) {
+      composite += scores[dim] * WEIGHTS[dim];
+    });
+    composite = Math.round(composite);
+
+    var grade;
+    if (composite >= 95)      grade = 'S';
+    else if (composite >= 85) grade = 'A';
+    else if (composite >= 70) grade = 'B';
+    else if (composite >= 50) grade = 'C';
+    else                      grade = 'D';
+
+    return { scores: scores, composite: composite, grade: grade };
+  }
+
+  // ── Render helpers ─────────────────────────────────────────────────────────
+  var lastResult = null;
+
+  function dimFillClass(score) {
+    if (score >= 85) return 'dim-fill-high';
+    if (score >= 70) return 'dim-fill-good';
+    if (score >= 50) return 'dim-fill-mid';
+    if (score >= 30) return 'dim-fill-low';
+    return 'dim-fill-poor';
+  }
+
+  function clearResultsBody() {
+    while (resultsBody.firstChild) resultsBody.removeChild(resultsBody.firstChild);
+  }
+
+  function buildEmptyState(message) {
+    var wrap = document.createElement('div');
+    wrap.className = 'empty-state';
+
+    var svgIcon = makeSvgUse('icon-doc');
+    svgIcon.style.width = '40px';
+    svgIcon.style.height = '40px';
+    wrap.appendChild(svgIcon);
+
+    var p = document.createElement('p');
+    p.textContent = message;
+    wrap.appendChild(p);
+
+    return wrap;
+  }
+
+  // ── Render results ─────────────────────────────────────────────────────────
+  function renderResults(result, text) {
+    lastResult = { result: result, text: text };
+
+    clearResultsBody();
+
+    // Score hero
+    var hero = document.createElement('div');
+    hero.className = 'score-hero';
+    hero.setAttribute('aria-label', 'Score: ' + result.composite + ', Grade: ' + result.grade);
+
+    var numWrap = document.createElement('div');
+    numWrap.className = 'score-number-wrap';
+
+    var bigNum = document.createElement('div');
+    bigNum.className = 'score-big';
+    bigNum.textContent = result.composite;
+
+    var gradeBadge = document.createElement('div');
+    gradeBadge.className = 'grade-badge grade-' + result.grade;
+    gradeBadge.textContent = result.grade;
+
+    numWrap.appendChild(bigNum);
+    numWrap.appendChild(gradeBadge);
+
+    var scoreMeta = document.createElement('div');
+    scoreMeta.className = 'score-meta';
+
+    var labelRow = document.createElement('div');
+    labelRow.className = 'score-label-row';
+
+    var leftLabel = document.createElement('span');
+    leftLabel.textContent = 'Composite Score';
+
+    var rightLabel = document.createElement('span');
+    rightLabel.textContent = result.composite + ' / 100';
+
+    labelRow.appendChild(leftLabel);
+    labelRow.appendChild(rightLabel);
+
+    var barTrack = document.createElement('div');
+    barTrack.className = 'score-bar-track';
+
+    var barFill = document.createElement('div');
+    barFill.className = 'score-bar-fill';
+    barFill.style.width = '0%';
+    barTrack.appendChild(barFill);
+
+    scoreMeta.appendChild(labelRow);
+    scoreMeta.appendChild(barTrack);
+
+    hero.appendChild(numWrap);
+    hero.appendChild(scoreMeta);
+    resultsBody.appendChild(hero);
+
+    // Animate bar
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        barFill.style.width = result.composite + '%';
+      });
+    });
+
+    // Dimensions title
+    var dimTitle = document.createElement('div');
+    dimTitle.className = 'dimensions-title';
+    dimTitle.textContent = 'Dimension Breakdown';
+    resultsBody.appendChild(dimTitle);
+
+    var dimGrid = document.createElement('div');
+    dimGrid.className = 'dimensions-grid';
+
+    DIMENSIONS.forEach(function (dim, idx) {
+      var score = result.scores[dim];
+      var row = document.createElement('div');
+      row.className = 'dim-row';
+
+      var label = document.createElement('span');
+      label.className = 'dim-label';
+      label.textContent = dim;
+
+      var track = document.createElement('div');
+      track.className = 'dim-track';
+
+      var fill = document.createElement('div');
+      fill.className = 'dim-fill ' + dimFillClass(score);
+      fill.style.width = '0%';
+      track.appendChild(fill);
+
+      var value = document.createElement('span');
+      value.className = 'dim-value';
+      value.textContent = score;
+
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(value);
+      dimGrid.appendChild(row);
+
+      setTimeout(function () {
+        fill.style.width = score + '%';
+      }, idx * 40);
+    });
+
+    resultsBody.appendChild(dimGrid);
+
+    // Footer
+    var wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    resultsMeta.textContent = wordCount + ' words \u00B7 ' + detectFormat(text) + ' \u00B7 scored ' + new Date().toLocaleTimeString();
+    resultsFooter.style.display = '';
+    resultsActions.style.display = '';
+  }
+
+  // ── Score action ───────────────────────────────────────────────────────────
+  function runScore() {
+    var text  = textarea.value;
+    var bytes = byteLength(text);
+
+    if (bytes > MAX_BYTES) {
+      showError('Content exceeds 50\u00A0KB limit. Please reduce the size before scoring.');
+      return;
+    }
+    if (!text.trim()) {
+      clearResultsBody();
+      resultsBody.appendChild(buildEmptyState('Paste an instruction file or load an example to get started'));
+      resultsFooter.style.display = 'none';
+      resultsActions.style.display = 'none';
+      return;
+    }
+
+    // Loading state
+    scoreBtn.disabled = true;
+    while (scoreBtn.firstChild) scoreBtn.removeChild(scoreBtn.firstChild);
+    var spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    scoreBtn.appendChild(spinner);
+    scoreBtn.appendChild(document.createTextNode(' Scoring\u2026'));
+
+    setTimeout(function () {
+      try {
+        var result = scoreContent(text);
+        renderResults(result, text);
+      } catch (err) {
+        showError('Scoring failed: ' + ((err && err.message) || 'Unknown error'));
+      } finally {
+        scoreBtn.disabled = false;
+        while (scoreBtn.firstChild) scoreBtn.removeChild(scoreBtn.firstChild);
+        scoreBtn.textContent = 'Score';
+        updateMeta();
+      }
+    }, 120);
+  }
+
+  scoreBtn.addEventListener('click', runScore);
+
+  textarea.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (!scoreBtn.disabled) runScore();
+    }
+  });
+
+  // ── Error display ──────────────────────────────────────────────────────────
+  function showError(msg) {
+    clearResultsBody();
+
+    var banner = document.createElement('div');
+    banner.className = 'error-banner';
+    banner.setAttribute('role', 'alert');
+
+    var iconWrap = document.createElement('span');
+    var iconSvg = makeSvgUse('icon-alert', 'error-banner-icon');
+    iconSvg.style.stroke = 'currentColor';
+    iconSvg.setAttribute('fill', 'none');
+    iconWrap.appendChild(iconSvg);
+
+    var msgEl = document.createElement('span');
+    msgEl.className = 'error-banner-text';
+    msgEl.textContent = msg;
+
+    var retryBtn = document.createElement('button');
+    retryBtn.className = 'error-banner-retry';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', runScore);
+
+    banner.appendChild(iconWrap);
+    banner.appendChild(msgEl);
+    banner.appendChild(retryBtn);
+    resultsBody.appendChild(banner);
+
+    resultsFooter.style.display = 'none';
+    resultsActions.style.display = 'none';
+  }
+
+  // ── Example loader ─────────────────────────────────────────────────────────
+  var ALLOWED_DEMOS = new Set([
+    'bad-skill.txt','good-skill.txt','sample-claude.txt',
+    'sample-cursorrules.txt','shieldclaw-before.txt','shieldclaw-after.txt'
+  ]);
+
+  exampleSelect.addEventListener('change', function () {
+    var file  = exampleSelect.value;
+    if (!file || !ALLOWED_DEMOS.has(file)) return;
+
+    var label = exampleSelect.options[exampleSelect.selectedIndex].textContent;
+    exampleSelect.disabled = true;
+
+    fetch('demos/' + file)
+      .then(function (resp) {
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.text();
+      })
+      .then(function (text) {
+        textarea.value = text;
+        updateMeta();
+        runScore();
+      })
+      .catch(function () {
+        showToast('Could not load "' + label + '" \u2014 demo file not found yet');
+      })
+      .finally(function () {
+        exampleSelect.disabled = false;
+        exampleSelect.value = '';
+      });
+  });
+
+  // ── Copy results ───────────────────────────────────────────────────────────
+  copyBtn.addEventListener('click', function () {
+    if (!lastResult) return;
+    var result = lastResult.result;
+    var text   = lastResult.text;
+
+    var lines = [
+      'Schliff Score: ' + result.composite + '/100 (Grade ' + result.grade + ')',
+      'Format: ' + detectFormat(text),
+      '',
+      '--- Dimension Breakdown ---',
+    ];
+
+    DIMENSIONS.forEach(function (dim) {
+      var pad = '              '.slice(dim.length);
+      lines.push(dim + pad + ('  ' + result.scores[dim]).slice(-3) + '/100');
+    });
+
+    lines.push('');
+    lines.push('Scored with Schliff Playground \u2014 https://schliff.dev/playground');
+
+    navigator.clipboard.writeText(lines.join('\n'))
+      .then(function ()  { showToast('Results copied to clipboard'); })
+      .catch(function () { showToast('Copy failed \u2014 try selecting text manually'); });
+  });
+
+  // ── Share via URL hash ─────────────────────────────────────────────────────
+  shareBtn.addEventListener('click', function () {
+    var text = textarea.value;
+    if (!text.trim()) {
+      showToast('Nothing to share \u2014 paste content first');
+      return;
+    }
+    try {
+      var encoded = btoa(encodeURIComponent(text));
+      var url = location.origin + location.pathname + '#content=' + encoded;
+      navigator.clipboard.writeText(url)
+        .then(function ()  { showToast('Share URL copied to clipboard'); })
+        .catch(function () { showToast('Could not copy URL'); });
+      history.replaceState(null, '', '#content=' + encoded);
+    } catch (e) {
+      showToast('Content too large to share via URL');
+    }
+  });
+
+  // ── Load from URL hash on startup ─────────────────────────────────────────
+  function loadFromHash() {
+    var hash = location.hash;
+    if (hash.indexOf('#content=') !== 0) return;
+
+    var encoded = hash.slice('#content='.length);
+    if (!encoded) return;
+
+    try {
+      var decoded = decodeURIComponent(atob(encoded));
+      if (byteLength(decoded) > MAX_BYTES) {
+        showError('Shared content exceeds the 50\u00A0KB size limit and cannot be loaded.');
+        return;
+      }
+      textarea.value = decoded;
+      updateMeta();
+      setTimeout(runScore, 200);
+    } catch (e) {
+      history.replaceState(null, '', location.pathname);
+    }
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  updateMeta();
+  // Initial empty state
+  resultsBody.appendChild(buildEmptyState('Paste an instruction file or load an example to get started'));
+  loadFromHash();
+
+}());
+</script>
+</body>
+</html>

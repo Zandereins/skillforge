@@ -1,0 +1,77 @@
+---
+name: schliff
+description: >
+  Deterministic skill linter and scoring engine for Claude Code — the Ruff for
+  SKILL.md files. 7-dimension structural scoring (structure, triggers, quality,
+  edges, efficiency, composability, clarity) with anti-gaming detection and
+  cross-session episodic memory. Trigger phrases: "make this skill better",
+  "score my skill", "lint my skill", "audit skill". Do NOT use for brand-new
+  skills from scratch — use skill-creator first.
+---
+
+# Schliff — Skill Measurement & Iteration Framework
+
+Constraint + clear metric + disciplined iteration = compounding gains.
+
+## Quick Start (Only 2 Inputs Required)
+
+```bash
+/schliff
+Target: path/to/SKILL.md
+Goal: Make the skill trigger correctly for deployment scenarios
+```
+
+Defaults: Metric=composite_score, Verify=score-skill.py, Iterations=30.
+
+## Core Loop (NEVER Pauses)
+
+```
+INPUT: Skill path + GOAL + PRIMARY METRIC + VERIFY method + time budget
+SETUP: Read ALL files → Analyze → Generate eval suite → Baseline (#0)
+LOOP (N iterations, continues until goal met or budget exhausted):
+  Exp N: Review skill + results + git history
+  → Pick ONE atomic change (based on gaps + history)
+  → Edit SKILL.md or references
+  → Commit: "schliff exp-N: [description]"
+  → Run VERIFY, compute PRIMARY METRIC
+  → Improved? Keep. Worse? Revert. Error? Fix or skip.
+```
+
+## When to Use
+
+- **Skill not triggering** → Run `/schliff` on trigger-accuracy metric
+- **Wrong/incomplete outputs** → Set goal, metric = binary eval pass rate
+- **Harden for edge cases** → Focus on edge-coverage metric
+- **Skill too verbose** → Optimize token-efficiency metric
+- **Don't know what's wrong** → Run `/schliff:analyze` for auto-discovery
+
+Do NOT use for creating new skills from scratch. Do NOT use for SQL tuning.
+
+## Setup
+
+Requires: Python 3.9+, the `schliff` skill installed in `.claude/skills/`.
+
+1. Install the skill via `skill-creator` or clone from GitHub
+2. Run `/schliff:analyze` to get a baseline score
+3. Set your improvement goal and primary metric
+4. Start the iteration loop with `/schliff`
+
+## Example Session
+
+For instance, improving a deployment skill from C to A:
+
+```bash
+/schliff
+Target: .claude/skills/deploy/SKILL.md
+Goal: Reach grade A (composite >= 85)
+Metric: composite_score
+```
+
+The tool will analyze edge case coverage, e.g. missing error handling
+for timeout scenarios, and suggest atomic fixes per iteration.
+
+## Edge Cases
+
+- If the input file is empty or missing frontmatter, returns score 0
+- If the eval suite has no assertions, auto-generates from the skill
+- If a regex pattern causes ReDoS, the security dimension flags it

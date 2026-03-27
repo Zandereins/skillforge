@@ -1,0 +1,32 @@
+# Project Guidelines
+
+## Architecture
+- Next.js 16 App Router with Server Components by default
+- PostgreSQL via Neon, Redis via Upstash
+- Authentication: Clerk middleware in proxy.ts
+
+## Code Style
+- TypeScript strict mode, no `any`
+- Use `async/await`, never raw Promises
+- Error handling: explicit try/catch at API boundaries
+- Imports: absolute paths via `@/` alias
+
+## Testing
+- Jest for unit tests, Playwright for E2E
+- Minimum 80% coverage on new code
+- Test files co-located: `foo.test.ts` next to `foo.ts`
+
+## Git
+- Conventional commits: feat/fix/docs/refactor/test
+- Feature branches off main, squash merge
+- PR requires 1 approval + green CI
+
+## Secrets
+- Never hardcode tokens or API keys
+- Use environment variables via `process.env`
+- `.env.local` in .gitignore
+
+## Performance
+- Images: next/image with WebP, lazy loading
+- Fonts: next/font/google, display swap
+- Bundle: dynamic imports for heavy components

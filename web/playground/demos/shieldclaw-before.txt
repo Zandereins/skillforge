@@ -1,0 +1,22 @@
+---
+name: shieldclaw
+---
+
+# ShieldClaw
+
+ShieldClaw is a security scanning tool for code repositories.
+
+## Usage
+
+Run shieldclaw on your codebase to find security issues. It checks for common vulnerabilities and reports them.
+
+## Features
+
+- Scans for hardcoded secrets
+- Checks dependency vulnerabilities
+- Reviews authentication patterns
+- Looks for injection risks
+
+## How to Run
+
+Just tell Claude to scan your code for security issues. ShieldClaw will handle the rest.
