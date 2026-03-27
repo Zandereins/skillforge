@@ -7,6 +7,7 @@ Usage:
     schliff diff <path>              Explain score changes between git commits
     schliff verify <path>            CI gate — exit 0 if pass, 1 if fail
     schliff doctor                   Scan all installed skills
+    schliff report <path>            Generate Markdown score report
     schliff badge <path>             Generate markdown badge
     schliff suggest <path>           Suggest ranked fixes with estimated score impact
     schliff demo                     Score a built-in bad skill
@@ -116,6 +117,11 @@ def cmd_score(args: argparse.Namespace) -> None:
 
         composite = compute_composite(scores)
 
+        # Token budget check
+        from scoring.formats import estimate_tokens, check_token_budget
+        skill_content = Path(skill_path).read_text(encoding="utf-8")
+        token_info = check_token_budget(skill_content, detected_fmt)
+
         if getattr(args, "json", False):
             result = {
                 "skill_path": display_source,
@@ -123,6 +129,7 @@ def cmd_score(args: argparse.Namespace) -> None:
                 "composite_score": composite["score"],
                 "dimensions": {k: round(v["score"], 1) if isinstance(v["score"], float) else v["score"] for k, v in scores.items()},
                 "warnings": composite["warnings"],
+                "token_budget": token_info,
             }
             print(json.dumps(result, indent=2))
         else:
@@ -158,6 +165,41 @@ def cmd_score(args: argparse.Namespace) -> None:
                 fix_count=fix_count,
             )
             print(output)
+
+            # Token budget line
+            from terminal_art import is_color_tty, RESET
+            tok = token_info["tokens"]
+            bud = token_info["budget"]
+            if is_color_tty():
+                if token_info["within_budget"]:
+                    color = "\x1b[32m"  # green
+                else:
+                    color = "\x1b[33m"  # yellow
+                print(f"  Tokens: {color}{tok:,}{RESET} / {bud:,} ({token_info['severity']})")
+            else:
+                print(f"  Tokens: {tok:,} / {bud:,} ({token_info['severity']})")
+
+            # --tokens: section breakdown
+            if getattr(args, "tokens", False):
+                lines = skill_content.splitlines()
+                sections: list[tuple[str, int]] = []
+                current_section = "(preamble)"
+                section_start = 0
+                for i, line in enumerate(lines):
+                    if line.startswith("# ") or line.startswith("## "):
+                        if i > section_start:
+                            sec_content = "\n".join(lines[section_start:i])
+                            sections.append((current_section, estimate_tokens(sec_content)))
+                        current_section = line.lstrip("#").strip()
+                        section_start = i
+                # Last section
+                sec_content = "\n".join(lines[section_start:])
+                sections.append((current_section, estimate_tokens(sec_content)))
+
+                print("\n  Token Breakdown by Section:")
+                for name, count in sections:
+                    print(f"    {name:<40s} {count:>6,} tokens")
+
             if url:
                 print(f"  Source: {url}")
             if detected_fmt != "skill.md":
@@ -223,9 +265,11 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     import doctor as doctor_mod
 
     verbose = getattr(args, "verbose", False)
+    repo_root = getattr(args, "repo", None)
     report = doctor_mod.run_doctor(
         skill_dirs=getattr(args, "skill_dirs", None),
         verbose=verbose,
+        repo_root=repo_root,
     )
 
     if getattr(args, "json", False):
@@ -611,6 +655,40 @@ def cmd_suggest(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_report(args: argparse.Namespace) -> None:
+    """Generate a Markdown score report, optionally upload as GitHub Gist."""
+    from pathlib import Path
+    from scoring import compute_composite
+    from shared import build_scores
+    from terminal_art import score_to_grade
+    import report as report_mod
+
+    if not Path(args.skill_path).exists():
+        print(f"Error: file not found: {args.skill_path}", file=sys.stderr)
+        sys.exit(1)
+
+    eval_suite = _load_eval_suite_from_args(args)
+    scores = build_scores(args.skill_path, eval_suite, include_runtime=True)
+    composite = compute_composite(scores)
+    grade = score_to_grade(composite["score"])
+
+    markdown = report_mod.generate_report_markdown(
+        scores=scores,
+        skill_path=args.skill_path,
+        composite=composite,
+        grade=grade,
+    )
+
+    if getattr(args, "gist", False):
+        url = report_mod.upload_gist(markdown)
+        if url:
+            print(f"Gist created: {url}")
+        else:
+            print(markdown)
+    else:
+        print(markdown)
+
+
 def cmd_version(_args: argparse.Namespace) -> None:
     """Print version string."""
     try:
@@ -644,6 +722,8 @@ def main():
         default=None,
         help="Override format detection (useful when filename doesn't match content type)",
     )
+    score_parser.add_argument("--tokens", action="store_true",
+                              help="Show token budget breakdown by section")
 
     # verify command
     verify_parser = subparsers.add_parser("verify", help="CI gate — exit 0/1 based on score")
@@ -664,6 +744,8 @@ def main():
                                help="Directories to scan")
     doctor_parser.add_argument("--verbose", "-v", action="store_true",
                                help="Show per-skill issues")
+    doctor_parser.add_argument("--repo", default=None,
+                               help="Repository root for drift detection and instruction file discovery")
 
     # badge command
     badge_parser = subparsers.add_parser("badge", help="Generate markdown badge for a skill")
@@ -692,6 +774,13 @@ def main():
     suggest_parser.add_argument("--top", type=int, default=5, help="Number of suggestions (default: 5)")
     suggest_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
 
+    # report command
+    report_parser = subparsers.add_parser("report", help="Generate Markdown score report")
+    report_parser.add_argument("skill_path", help="Path to SKILL.md")
+    report_parser.add_argument("--gist", action="store_true",
+                               help="Upload report as GitHub Gist (requires GITHUB_TOKEN)")
+    report_parser.add_argument("--eval-suite", help="Path to eval-suite.json")
+
     # demo command
     subparsers.add_parser("demo", help="Score a built-in bad skill to see schliff in action")
 
@@ -708,6 +797,7 @@ def main():
         "doctor": cmd_doctor,
         "badge": cmd_badge,
         "suggest": cmd_suggest,
+        "report": cmd_report,
         "demo": cmd_demo,
         "version": cmd_version,
     }
