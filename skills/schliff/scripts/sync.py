@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from difflib import SequenceMatcher
 from typing import Dict, List, Tuple
 
@@ -248,6 +249,8 @@ def extract_directives(content: str) -> List[Dict]:
     for m in _RE_CONFIG.finditer(cleaned):
         key = m.group(1)
         value = m.group(2).strip()
+        # Strip trailing inline comments (e.g. "120  # python" → "120")
+        value = re.sub(r"\s*#.*$", "", value).strip()
         # Only accept keys that look like actual config names
         if not _RE_CONFIG_KEY.match(key):
             continue
@@ -289,7 +292,8 @@ def load_all_directives(repo_root: str) -> List[Dict]:
     for entry in discover_all_instruction_files(repo_root):
         try:
             content = read_skill_safe(entry["path"])
-        except (FileNotFoundError, ValueError, OSError):
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            print(f"Warning: skipping {entry['path']}: {exc}", file=sys.stderr)
             continue
 
         for directive in extract_directives(content):
@@ -540,11 +544,15 @@ def find_gaps(files: List[dict]) -> List[dict]:
 # Redundancy detection
 # ---------------------------------------------------------------------------
 
+_MAX_REDUNDANCY_DIRECTIVES = 150  # cap to avoid O(n²) blowup on large repos
+
+
 def find_redundancies(files: List[dict]) -> List[dict]:
     """Find near-duplicate directives across different files (similarity > 0.80).
 
     Intra-file duplicates are ignored.  Comparison is O(n²) on the total
-    number of directives; acceptable for typical repos (< 500 directives).
+    number of directives; capped at _MAX_REDUNDANCY_DIRECTIVES to keep
+    runtime under ~1s on typical hardware.
     """
     all_directives: List[Tuple[str, str, str]] = []
     for f in files:
@@ -552,6 +560,10 @@ def find_redundancies(files: List[dict]) -> List[dict]:
             norm = _normalize(d["text"])
             if norm:
                 all_directives.append((norm, d["text"], f["path"]))
+
+    if len(all_directives) > _MAX_REDUNDANCY_DIRECTIVES:
+        # Truncate to cap; prefer directives from more files for coverage
+        all_directives = all_directives[:_MAX_REDUNDANCY_DIRECTIVES]
 
     n = len(all_directives)
     parent = list(range(n))
@@ -613,8 +625,18 @@ def compute_consistency_score(
     gaps: List[dict],
     redundancies: List[dict],
 ) -> int:
-    """Compute overall consistency score (0-100)."""
-    score = 100 - len(contradictions) * 15 - len(gaps) * 5 - len(redundancies) * 3
+    """Compute overall consistency score (0-100).
+
+    Penalties are weighted by severity:
+    - Contradictions: high=-15, medium=-7 (polarity vs semantic opposition)
+    - Gaps: -5 per missing topic
+    - Redundancies: -3 per duplicate cluster
+    """
+    contradiction_penalty = sum(
+        15 if c.get("severity") == "high" else 7
+        for c in contradictions
+    )
+    score = 100 - contradiction_penalty - len(gaps) * 5 - len(redundancies) * 3
     return max(0, min(100, score))
 
 

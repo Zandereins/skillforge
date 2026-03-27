@@ -65,6 +65,8 @@ def record_score(
     Non-finite composites are clamped to 0.0; non-numeric dimensions
     default to 0.  Writes atomically via temp file + rename.
     """
+    # Normalize path for consistent deduplication (relative vs absolute)
+    skill_path = str(Path(skill_path).resolve())
     hist_path = get_history_path(skill_path)
     commit = get_current_commit()
 
@@ -128,13 +130,21 @@ def record_score(
         fd, tmp_path = tempfile.mkstemp(
             dir=str(hist_path.parent), suffix=".tmp"
         )
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, str(hist_path))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, str(hist_path))
+        except OSError:
+            # Clean up orphaned temp file before fallback
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            hist_path.write_text(data, encoding="utf-8")
     except OSError:
-        # Fallback: direct write if atomic fails (e.g., cross-device)
+        # mkstemp itself failed — direct write
         hist_path.write_text(data, encoding="utf-8")
 
     return entry
@@ -169,15 +179,27 @@ def load_history(skill_path: Optional[str] = None) -> List[dict]:
     try:
         raw = hist_path.read_text(encoding="utf-8")
         if len(raw) > _MAX_HISTORY_SIZE:
-            return []
-        entries = json.loads(raw)
-        if not isinstance(entries, list):
-            return []
+            print(
+                f"Warning: history file exceeds {_MAX_HISTORY_SIZE} bytes, "
+                "loading last 100 entries only",
+                file=sys.stderr,
+            )
+            entries = json.loads(raw)
+            if isinstance(entries, list):
+                entries = entries[-100:]
+            else:
+                return []
+        else:
+            entries = json.loads(raw)
+            if not isinstance(entries, list):
+                return []
     except (json.JSONDecodeError, OSError):
         return []
 
     if skill_path:
-        entries = [e for e in entries if e.get("skill") == skill_path]
+        # Normalize for consistent matching (record_score stores resolved paths)
+        normalized = str(Path(skill_path).resolve())
+        entries = [e for e in entries if e.get("skill") == normalized]
 
     return entries
 

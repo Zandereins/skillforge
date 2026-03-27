@@ -85,7 +85,7 @@ def test_load_filters_by_skill(hist_dir, monkeypatch):
 
     result = track.load_history("alpha.md")
     assert len(result) == 1
-    assert result[0]["skill"] == "alpha.md"
+    assert result[0]["skill"] == str(Path("alpha.md").resolve())
 
 
 # ---------------------------------------------------------------------------

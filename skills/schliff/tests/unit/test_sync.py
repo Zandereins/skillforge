@@ -228,18 +228,30 @@ class TestConsistency:
         assert contradictions == []
 
     def test_score_calculation(self):
-        """Score formula: 100 - contradictions*15 - gaps*5 - redundancies*3."""
-        # 2 contradictions, 3 gaps, 1 redundancy → 100 - 30 - 15 - 3 = 52
-        contradictions = [{"type": "polarity"}, {"type": "config"}]
+        """Score formula: 100 - contradiction_penalty - gaps*5 - redundancies*3.
+
+        high severity = -15, medium severity = -7.
+        """
+        # 2 high contradictions, 3 gaps, 1 redundancy → 100 - 30 - 15 - 3 = 52
+        contradictions = [
+            {"type": "polarity", "severity": "high"},
+            {"type": "config", "severity": "high"},
+        ]
         gaps = [{"topic": "a"}, {"topic": "b"}, {"topic": "c"}]
         redundancies = [{"directive": "x"}]
 
         score = compute_consistency_score(contradictions, gaps, redundancies)
         assert score == 52
 
+    def test_score_medium_severity_weighted(self):
+        """Medium-severity contradictions cost 7 points, not 15."""
+        contradictions = [{"type": "semantic", "severity": "medium"}]
+        score = compute_consistency_score(contradictions, [], [])
+        assert score == 93  # 100 - 7
+
     def test_score_clamped_to_zero(self):
         """Score never drops below 0 even with many issues."""
-        contradictions = [{"type": "polarity"}] * 10  # -150
+        contradictions = [{"type": "polarity", "severity": "high"}] * 10  # -150
         gaps = [{"topic": "a"}] * 10  # -50
         redundancies = [{"directive": "x"}] * 10  # -30
 
