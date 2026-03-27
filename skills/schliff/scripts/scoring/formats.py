@@ -107,3 +107,59 @@ def _extract_description(content: str, name: str) -> str:
         desc = name
     # Truncate to keep frontmatter compact
     return desc[:200]
+
+
+# ---------------------------------------------------------------------------
+# Token Budget Estimation
+# ---------------------------------------------------------------------------
+
+def estimate_tokens(content: str) -> int:
+    """Estimate token count using len(content) // 4 heuristic.
+
+    This is a rough approximation — real tokenizers vary by model,
+    but len//4 is a widely-used stdlib-only estimate.
+    """
+    return len(content) // 4
+
+
+FORMAT_TOKEN_BUDGETS: dict[str, int] = {
+    "skill.md": 1000,
+    "claude.md": 2000,
+    "cursorrules": 500,
+    "agents.md": 3000,
+    "unknown": 1500,
+}
+
+
+def check_token_budget(content: str, fmt: str) -> dict:
+    """Check if content is within the recommended token budget for its format.
+
+    Returns dict with:
+    - tokens: int — estimated token count
+    - budget: int — recommended budget for this format
+    - within_budget: bool — True if tokens <= budget
+    - ratio: float — tokens / budget (1.0 = exactly at budget)
+    - severity: str — "ok" | "warning" | "over"
+      - ok: within budget
+      - warning: 80-100% of budget
+      - over: exceeds budget
+    """
+    tokens = estimate_tokens(content)
+    budget = FORMAT_TOKEN_BUDGETS.get(fmt, FORMAT_TOKEN_BUDGETS["unknown"])
+    ratio = tokens / budget if budget else 0.0
+    within_budget = tokens <= budget
+
+    if ratio > 1.0:
+        severity = "over"
+    elif ratio > 0.8:
+        severity = "warning"
+    else:
+        severity = "ok"
+
+    return {
+        "tokens": tokens,
+        "budget": budget,
+        "within_budget": severity != "over",
+        "ratio": ratio,
+        "severity": severity,
+    }

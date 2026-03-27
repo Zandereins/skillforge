@@ -338,3 +338,80 @@ class TestJsonRounding:
                 assert score == round(score, 1), (
                     f"Dimension {dim} has unrounded value {score}"
                 )
+
+
+# ===========================================================================
+# 8. cmd_report — CLI smoke tests
+# ===========================================================================
+
+class TestCmdReport:
+    """cmd_report must produce Markdown output or handle errors gracefully."""
+
+    def test_report_exits_zero(self, tmp_path):
+        """cmd_report on a valid skill exits 0."""
+        skill_path = _write_skill(tmp_path, GOOD_SKILL)
+        result = _run_cli("report", skill_path)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+
+    def test_report_produces_markdown(self, tmp_path):
+        """cmd_report output contains the report header."""
+        skill_path = _write_skill(tmp_path, GOOD_SKILL)
+        result = _run_cli("report", skill_path)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert "## Schliff Score Report" in result.stdout
+
+    def test_report_contains_skill_path(self, tmp_path):
+        """cmd_report output references the scored file."""
+        skill_path = _write_skill(tmp_path, GOOD_SKILL)
+        result = _run_cli("report", skill_path)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert skill_path in result.stdout
+
+    def test_report_missing_file(self, tmp_path):
+        """cmd_report with a missing file exits non-zero."""
+        missing = str(tmp_path / "nope.md")
+        result = _run_cli("report", missing)
+        assert result.returncode == 1
+        assert "not found" in result.stderr.lower()
+
+
+# ===========================================================================
+# 9. cmd_score --json includes token_budget key
+# ===========================================================================
+
+class TestScoreTokenBudget:
+    """cmd_score --json must include the token_budget field."""
+
+    def test_json_includes_token_budget_key(self, tmp_path):
+        """JSON output must contain a 'token_budget' key."""
+        skill_path = _write_skill(tmp_path, GOOD_SKILL)
+        result = _run_cli("score", "--json", skill_path)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        data = json.loads(result.stdout)
+        assert "token_budget" in data, (
+            f"'token_budget' key missing from JSON output: {list(data.keys())}"
+        )
+
+    def test_token_budget_has_required_fields(self, tmp_path):
+        """token_budget must contain tokens, budget, within_budget, severity."""
+        skill_path = _write_skill(tmp_path, GOOD_SKILL)
+        result = _run_cli("score", "--json", skill_path)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        data = json.loads(result.stdout)
+        tb = data["token_budget"]
+        assert "tokens" in tb, f"Missing 'tokens' in token_budget: {tb}"
+        assert "budget" in tb, f"Missing 'budget' in token_budget: {tb}"
+        assert "within_budget" in tb, f"Missing 'within_budget' in token_budget: {tb}"
+        assert "severity" in tb, f"Missing 'severity' in token_budget: {tb}"
+        assert isinstance(tb["tokens"], int)
+        assert isinstance(tb["budget"], int)
+        assert isinstance(tb["within_budget"], bool)
+
+    def test_tokens_flag_shows_breakdown(self, tmp_path):
+        """--tokens flag produces section breakdown output."""
+        skill_path = _write_skill(tmp_path, GOOD_SKILL)
+        result = _run_cli("score", "--tokens", skill_path)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert "token" in result.stdout.lower(), (
+            f"Expected token info in output, got: {result.stdout[:200]}"
+        )
