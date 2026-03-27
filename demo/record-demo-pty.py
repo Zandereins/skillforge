@@ -47,6 +47,21 @@ SCENES = [
         "cmd": CLI + ["suggest", "demo/bad-skill/SKILL.md"],
         "pause_after": 3.0,
     },
+    {
+        "label": "schliff sync demo/sync-conflict/",
+        "cmd": CLI + ["sync", "demo/sync-conflict/"],
+        "pause_after": 3.0,
+    },
+    {
+        "label": "schliff report demo/bad-skill/SKILL.md",
+        "cmd": CLI + ["report", "demo/bad-skill/SKILL.md"],
+        "pause_after": 3.0,
+    },
+    {
+        "label": "schliff drift --repo .",
+        "cmd": CLI + ["drift", "--repo", "."],
+        "pause_after": 3.0,
+    },
 ]
 
 

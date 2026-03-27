@@ -17,14 +17,14 @@ schliff score --url https://github.com/user/repo/blob/main/SKILL.md
   <a href="skills/schliff/scripts/score-skill.py"><img alt="Structural Score" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-score.json"></a>
   <a href=".github/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Zandereins/130bb61237b5b9b1536718e6a2296d4a/raw/schliff-tests.json"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
-  <a href="CHANGELOG.md"><img alt="v7.0.0" src="https://img.shields.io/badge/v7.0.0-F59E0B?label=version"></a>
+  <a href="CHANGELOG.md"><img alt="v7.1.0" src="https://img.shields.io/badge/v7.1.0-F59E0B?label=version"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="PyPI" src="https://img.shields.io/pypi/v/schliff?style=flat-square"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="Downloads" src="https://img.shields.io/pypi/dm/schliff?style=flat-square"></a>
   <a href="https://pypi.org/project/schliff/"><img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9+-blue?style=flat-square"></a>
 </p>
 
 ```
-schliff v7.0.0
+schliff v7.1.0
 
   structure      ██████████  100/100  perfect
   triggers       ██████████  100/100  perfect
@@ -54,7 +54,7 @@ Deterministic static analysis. No LLM required. Same input, same output, every t
 | efficiency | 10% | Hedging, filler words, repetition, low signal-to-noise |
 | composability | 10% | Missing scope boundaries, no error behavior, no handoff points |
 | clarity | 5% | Contradictions, vague references, ambiguous instructions |
-| security | 8% | *(opt-in)* Prompt injection, data exfiltration, obfuscation, dangerous commands |
+| security | 8% | *(opt-in via --security)* Prompt injection, data exfiltration, obfuscation, dangerous commands |
 | runtime | 10% | *(opt-in)* Actual Claude behavior against eval assertions |
 
 Weights are renormalized across measured dimensions (sum to 1.0). Without `--runtime`, the 7 structural dimensions carry 100% of the score.
@@ -95,6 +95,10 @@ schliff score --url https://github.com/.../SKILL.md # score remote files
 schliff compare skill-v1.md skill-v2.md             # side-by-side comparison
 schliff suggest path/to/SKILL.md                    # ranked fixes with impact
 schliff doctor                                       # scan all installed skills
+schliff report path/to/SKILL.md                    # markdown report (+ --gist)
+schliff drift --repo .                              # find stale references
+schliff sync .                                      # cross-file consistency check
+schliff track path/to/SKILL.md                     # score history + sparkline
 ```
 
 ### Autonomous improvement (requires Claude Code)
@@ -113,7 +117,10 @@ git clone https://github.com/Zandereins/schliff.git && bash schliff/install.sh
 
 ```
 Write instruction file  -->  schliff score  -->  schliff suggest  -->  fix  -->  ship
-     (any format)            (8 dimensions)      (ranked fixes)
+     (any format)            (9 dimensions)      (ranked fixes)        │
+                                                                       ↓
+                             schliff track  <--  schliff sync  <--  schliff drift
+                             (trend over time)   (cross-file)    (stale references)
 ```
 
 Works with any AI coding agent: Claude Code (SKILL.md), Cursor (.cursorrules), GitHub Copilot (AGENTS.md), or project configs (CLAUDE.md). Schliff grinds instruction files to production quality.
@@ -174,8 +181,13 @@ Real-world skills vary. Complex skills plateau around [A] to [S] depending on ev
 | `schliff suggest <path>` | Ranked actionable fixes with estimated score impact |
 | `schliff diff <path>` | Show score delta vs. previous commit (or any `--ref`) |
 | `schliff verify <path>` | CI gate — exit 0/1, `--min-score`, `--regression`, pre-commit hook |
-| `schliff doctor` | Scan all installed skills, show health grades |
+| `schliff doctor` | Scan all installed skills + instruction files, health grades, drift analysis |
 | `schliff badge <path>` | Generate copy-paste markdown badge |
+| `schliff report <path>` | Generate Markdown quality report (`--gist` for shareable link) |
+| `schliff score --tokens` | Section-by-section token breakdown with format-specific budgets |
+| `schliff drift --repo <dir>` | Find stale paths, scripts, and make targets in instruction files |
+| `schliff sync <dir>` | Cross-file consistency: contradictions, gaps, redundancies |
+| `schliff track <path>` | Score history over time with sparkline and regression detection |
 
 ### Claude Code skills (require integration)
 
@@ -195,7 +207,7 @@ Score skills in CI. Block regressions. The Codecov for SKILL.md files.
 
 ```yaml
 # GitHub Action
-- uses: Zandereins/schliff@v6
+- uses: Zandereins/schliff@v7
   with:
     skill-path: '.claude/skills/my-skill/SKILL.md'
     minimum-score: '75'
@@ -215,11 +227,18 @@ schliff verify path/to/SKILL.md --min-score 75 --regression
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/Zandereins/schliff
-    rev: v6.3.0
+    rev: v7.1.0
     hooks:
       - id: schliff-verify
         args: ['--min-score', '75']
 ```
+
+---
+
+## Web
+
+- **[Playground](web/playground/)** — interactive browser-based scorer, try before installing
+- **[Leaderboard](web/leaderboard/)** — community scoreboard (scaffold, external storage coming)
 
 ---
 
@@ -235,7 +254,7 @@ Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch) 
 | **Anti-gaming** | None | 6 detection vectors |
 | **Memory** | Stateless | Cross-session episodic store |
 | **Dependencies** | External (ML frameworks) | Python 3.9+ stdlib only |
-| **Tests** | Minimal | [540 unit](skills/schliff/tests/unit/) + [99 integration](skills/schliff/scripts/test-integration.sh) |
+| **Tests** | Minimal | [732 unit](skills/schliff/tests/unit/) + [99 integration](skills/schliff/scripts/test-integration.sh) |
 
 ---
 

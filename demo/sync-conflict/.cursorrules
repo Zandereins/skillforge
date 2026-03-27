@@ -1,0 +1,4 @@
+Never use semicolons — prefer ASI (automatic semicolon insertion).
+Always log errors to console.log for debugging.
+Use spaces for indentation, 2 spaces per level.
+line-length = 80

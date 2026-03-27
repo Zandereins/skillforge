@@ -3,6 +3,34 @@
 All notable changes to Schliff are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [7.1.0] - 2026-03-27
+
+### Added
+- **`schliff report`**: Generate Markdown quality reports with dimension breakdown, shareable via `--gist` (GitHub Gist API)
+- **`schliff drift`**: Stale reference scanner — detects paths, scripts, and make targets referenced in instruction files that no longer exist on disk
+- **`schliff sync`**: Cross-file instruction consistency analysis — finds contradictions, gaps, and redundancies across all instruction files in a repository
+- **`schliff track`**: Score tracking over time with sparkline visualization and regression detection
+- **Token budget tracking**: `schliff score --tokens` shows section-by-section token breakdown with format-specific budgets and severity levels (ok/warning/over)
+- **Doctor multi-format**: `schliff doctor` now discovers and reports on CLAUDE.md, .cursorrules, AGENTS.md alongside SKILL.md, with drift analysis on all discovered files
+- **Web Playground polish**: Demo file allowlist, Content-Security-Policy headers, improved vercel.json routing
+- **Leaderboard scaffold**: Static leaderboard site with serverless API at web/leaderboard/ (ephemeral storage for demo phase, external storage TODO)
+- 140 new tests (592 → 732 total), 4 audit iterations on core branch, 1 audit iteration each on intelligence and web branches
+
+### Security
+- Path traversal prevention in drift detector (normpath + containment check, absolute/parent path rejection)
+- Control character and bidirectional override rejection in leaderboard skill_name validation
+- Content-Security-Policy headers on playground and leaderboard
+- Duplicate CORS header elimination (vercel.json-only, no Python-level ACAO)
+- Temp file cleanup on atomic write failure in track module
+- Version field length bound (max 50 chars) on leaderboard submissions
+
+### Fixed
+- Token budget severity/within_budget contradiction at exactly 100% utilization
+- Doctor relpath used process cwd instead of scan_root (wrong paths when invoked from different directory)
+- `find_redundancies` O(n²) performance — capped at 150 directives
+- `load_history` silently returned empty list for oversized files (now salvages last 100 entries with warning)
+- Config value regex captured inline comments as part of value (false conflicts)
+
 ## [7.0.0] - 2026-03-26
 
 ### Added
