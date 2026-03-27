@@ -151,7 +151,7 @@ def check_token_budget(content: str, fmt: str) -> dict:
 
     if ratio > 1.0:
         severity = "over"
-    elif ratio >= 0.8:
+    elif ratio > 0.8:
         severity = "warning"
     else:
         severity = "ok"
@@ -159,7 +159,7 @@ def check_token_budget(content: str, fmt: str) -> dict:
     return {
         "tokens": tokens,
         "budget": budget,
-        "within_budget": within_budget,
+        "within_budget": severity != "over",
         "ratio": ratio,
         "severity": severity,
     }

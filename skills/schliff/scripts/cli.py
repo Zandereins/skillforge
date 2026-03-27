@@ -119,12 +119,13 @@ def cmd_score(args: argparse.Namespace) -> None:
 
         composite = compute_composite(scores)
 
-        # Token budget check
+        # Token budget check — reuse cached content from shared.read_skill_safe
         from scoring.formats import estimate_tokens, check_token_budget
+        from shared import read_skill_safe
         try:
-            skill_content = Path(skill_path).read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            print(f"Error: {display_source} is not a valid UTF-8 text file", file=sys.stderr)
+            skill_content = read_skill_safe(skill_path)
+        except (OSError, ValueError) as exc:
+            print(f"Error: could not read {display_source}: {exc}", file=sys.stderr)
             sys.exit(1)
         token_info = check_token_budget(skill_content, detected_fmt)
 
@@ -177,11 +178,14 @@ def cmd_score(args: argparse.Namespace) -> None:
             tok = token_info["tokens"]
             bud = token_info["budget"]
             if is_color_tty():
-                if token_info["within_budget"]:
-                    color = "\x1b[32m"  # green
+                sev = token_info["severity"]
+                if sev == "ok":
+                    color = "\x1b[32m"   # green
+                elif sev == "warning":
+                    color = "\x1b[33m"   # yellow
                 else:
-                    color = "\x1b[33m"  # yellow
-                print(f"  Tokens: {color}{tok:,}{RESET} / {bud:,} ({token_info['severity']})")
+                    color = "\x1b[31m"   # red for over
+                print(f"  Tokens: {color}{tok:,}{RESET} / {bud:,} ({sev})")
             else:
                 print(f"  Tokens: {tok:,} / {bud:,} ({token_info['severity']})")
 
@@ -678,13 +682,14 @@ def cmd_report(args: argparse.Namespace) -> None:
     composite = compute_composite(scores)
     grade = score_to_grade(composite["score"])
 
-    # Token budget for report
+    # Token budget for report — reuse cached content from shared.read_skill_safe
     from scoring.formats import detect_format, check_token_budget
+    from shared import read_skill_safe
     detected_fmt = detect_format(args.skill_path)
     try:
-        skill_content = Path(args.skill_path).read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        print(f"Error: {args.skill_path} is not a valid UTF-8 text file", file=sys.stderr)
+        skill_content = read_skill_safe(args.skill_path)
+    except (OSError, ValueError) as exc:
+        print(f"Error: could not read {args.skill_path}: {exc}", file=sys.stderr)
         sys.exit(1)
     token_info = check_token_budget(skill_content, detected_fmt)
 

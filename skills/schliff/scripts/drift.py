@@ -10,7 +10,6 @@ import json
 import os
 import re
 import sys
-from pathlib import Path
 from typing import Dict, List, Optional
 
 # ---------------------------------------------------------------------------
@@ -59,6 +58,9 @@ def _is_plausible_path(candidate: str) -> bool:
         return False
     # Reject URLs
     if candidate.startswith(("http://", "https://", "ftp://")):
+        return False
+    # Reject absolute paths and parent traversals
+    if candidate.startswith("/") or candidate.startswith(".."):
         return False
     # Reject domain-like refs (e.g. example.com/path)
     first_segment = candidate.split("/")[0]
@@ -198,7 +200,17 @@ def validate_references(
         line = ref_entry["line"]
 
         if ref_type == "path":
-            full_path = os.path.join(repo_root, str(ref))
+            full_path = os.path.normpath(os.path.join(repo_root, str(ref)))
+            repo_abs = os.path.realpath(repo_root)
+            if not full_path.startswith(repo_abs + os.sep) and full_path != repo_abs:
+                findings.append({
+                    "ref": ref,
+                    "type": ref_type,
+                    "line": line,
+                    "status": "invalid",
+                    "detail": "path escapes repo root",
+                })
+                continue
             if os.path.exists(full_path):
                 findings.append({
                     "ref": ref,

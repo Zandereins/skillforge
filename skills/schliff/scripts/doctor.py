@@ -247,6 +247,7 @@ def run_doctor(
         "results": results,
         "instruction_files": instruction_files,
         "drift_findings": drift_findings,
+        "scan_root": scan_root,
         "summary": " | ".join(summary_parts),
     }
 
@@ -309,7 +310,7 @@ def format_doctor_report(report: dict, verbose: bool = False) -> str:
     lines.append("  " + "-" * 25)
     if instruction_files:
         for f in instruction_files:
-            rel_path = os.path.relpath(f["path"])
+            rel_path = os.path.relpath(f["path"], start=report.get("scan_root", "."))
             lines.append(f"  {f['name']:<20s} {f['format']:<14s} ./{rel_path}")
     else:
         lines.append("  No project instruction files found.")

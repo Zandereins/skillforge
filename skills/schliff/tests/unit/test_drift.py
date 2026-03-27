@@ -212,6 +212,35 @@ class TestGenerateDriftReport:
 # validate_references — malformed package.json edge case
 # ---------------------------------------------------------------------------
 
+class TestPathTraversalPrevention:
+    """Ensure path traversal attacks are rejected."""
+
+    def test_dotdot_path_rejected_by_plausible(self):
+        """Paths starting with .. are rejected before validation."""
+        assert drift_mod._is_plausible_path("../../etc/passwd") is False
+
+    def test_absolute_path_rejected_by_plausible(self):
+        """Absolute paths are rejected."""
+        assert drift_mod._is_plausible_path("/etc/passwd") is False
+
+    def test_traversal_ref_marked_invalid(self, tmp_path):
+        """A ref that escapes repo root is marked invalid, not valid."""
+        # Manually craft a ref that bypasses _is_plausible_path
+        # (e.g. looks relative but resolves outside)
+        refs = [{"ref": "sub/../../outside.py", "type": "path", "line": 1}]
+        findings = drift_mod.validate_references(refs, str(tmp_path))
+        assert len(findings) == 1
+        assert findings[0]["status"] == "invalid"
+        assert "escapes repo root" in findings[0]["detail"]
+
+    def test_traversal_does_not_leak_host_paths(self, tmp_path):
+        """The detail field must not contain resolved paths outside repo."""
+        refs = [{"ref": "sub/../../../etc/passwd", "type": "path", "line": 1}]
+        findings = drift_mod.validate_references(refs, str(tmp_path))
+        assert len(findings) == 1
+        assert "/etc/passwd" not in findings[0].get("detail", "")
+
+
 class TestValidateReferencesEdgeCases:
     """Edge cases for validate_references with broken project files."""
 
