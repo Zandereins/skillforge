@@ -1,9 +1,11 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-import fcntl
-import traceback
+import sys
 from urllib.parse import urlparse, parse_qs
+
+VALID_GRADES = {"S", "A", "B", "C", "D"}
+VALID_FORMATS = {"SKILL.md", ".cursorrules", "CLAUDE.md", "AGENTS.md"}
 
 VALID_SORT_FIELDS = {
     "composite", "structure", "triggers", "quality", "edges",
@@ -15,20 +17,23 @@ DIMENSION_KEYS = {
     "composability", "clarity", "security", "sync",
 }
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "submissions.json")
+# Match submit.py storage paths
+DATA_DIR = "/tmp/schliff-leaderboard"
+DATA_PATH = os.path.join(DATA_DIR, "submissions.json")
+SEED_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "submissions.json")
 
 
 def _load_submissions():
-    data_path = os.path.realpath(DATA_PATH)
-    if not os.path.exists(data_path):
-        return []
-    with open(data_path, "r", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_SH)
-        try:
+    """Load submissions from /tmp, seeding from bundled data if needed."""
+    if os.path.exists(DATA_PATH):
+        with open(DATA_PATH, "r", encoding="utf-8") as f:
             content = f.read().strip()
             return json.loads(content) if content else []
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+    if os.path.exists(SEED_PATH):
+        with open(SEED_PATH, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            return json.loads(content) if content else []
+    return []
 
 
 def _sort_key(entry, sort_field):
@@ -37,9 +42,7 @@ def _sort_key(entry, sort_field):
     if sort_field == "composite":
         return entry.get("composite", 0)
     if sort_field == "delta":
-        # Sort by improvement delta if present, otherwise by composite
         return entry.get("delta", entry.get("composite", 0))
-    # dimension sort
     return entry.get("dimensions", {}).get(sort_field, 0)
 
 
@@ -51,16 +54,14 @@ class handler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # CORS handled by vercel.json — no duplicate headers
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # CORS handled by vercel.json
         self.end_headers()
 
     def do_GET(self):
@@ -95,22 +96,30 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "offset must be a non-negative integer"})
             return
 
-        # --- grade filter ---
+        # --- grade filter (validated against allowed set) ---
         grade_raw = first("grade")
         grade_filter = None
         if grade_raw:
             grade_filter = {g.strip() for g in grade_raw.split(",") if g.strip()}
+            invalid = grade_filter - VALID_GRADES
+            if invalid:
+                self._send_json(400, {"error": f"invalid grade(s): {', '.join(sorted(invalid))}"})
+                return
 
-        # --- format filter ---
+        # --- format filter (validated against allowed set) ---
         format_raw = first("format")
         format_filter = None
         if format_raw:
             format_filter = {f.strip() for f in format_raw.split(",") if f.strip()}
+            invalid = format_filter - VALID_FORMATS
+            if invalid:
+                self._send_json(400, {"error": f"invalid format(s): {', '.join(sorted(invalid))}"})
+                return
 
         try:
             entries = _load_submissions()
-        except Exception:
-            traceback.print_exc()
+        except Exception as exc:
+            print(f"Storage error: {type(exc).__name__}: {exc}", file=sys.stderr)
             self._send_json(500, {"error": "internal storage error"})
             return
 

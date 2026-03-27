@@ -1243,9 +1243,14 @@
   }
 
   // ── Example loader ─────────────────────────────────────────────────────────
+  var ALLOWED_DEMOS = new Set([
+    'bad-skill.txt','good-skill.txt','sample-claude.txt',
+    'sample-cursorrules.txt','shieldclaw-before.txt','shieldclaw-after.txt'
+  ]);
+
   exampleSelect.addEventListener('change', function () {
     var file  = exampleSelect.value;
-    if (!file) return;
+    if (!file || !ALLOWED_DEMOS.has(file)) return;
 
     var label = exampleSelect.options[exampleSelect.selectedIndex].textContent;
     exampleSelect.disabled = true;

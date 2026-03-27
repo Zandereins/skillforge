@@ -1,8 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-import fcntl
-import traceback
+import sys
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -15,7 +14,23 @@ VALID_DIMENSIONS = {
     "composability", "clarity", "security", "sync",
 }
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "submissions.json")
+# TODO: Replace with external storage (Vercel KV, Postgres, or Blob)
+# for production. /tmp is ephemeral — data is lost between cold starts.
+# This works for demo/prototype but NOT for persistent leaderboard data.
+DATA_DIR = "/tmp/schliff-leaderboard"
+DATA_PATH = os.path.join(DATA_DIR, "submissions.json")
+
+# Seed data path (bundled with deployment, read-only)
+SEED_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "submissions.json")
+
+# Control characters that could cause visual spoofing
+_CONTROL_CHARS = set(range(0x00, 0x20)) - {0x0A, 0x0D, 0x09}  # allow \n \r \t
+_BIDI_CHARS = {0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069}
+
+
+def _has_unsafe_chars(s: str) -> bool:
+    """Reject strings with control or bidirectional override characters."""
+    return any(ord(c) in _CONTROL_CHARS or ord(c) in _BIDI_CHARS for c in s)
 
 
 def _validate(body):
@@ -27,6 +42,8 @@ def _validate(body):
     skill_name = body["skill_name"]
     if not isinstance(skill_name, str) or not (1 <= len(skill_name) <= 200):
         return "skill_name must be a string between 1 and 200 characters"
+    if _has_unsafe_chars(skill_name):
+        return "skill_name contains invalid characters"
 
     repo_url = body["repo_url"]
     if not isinstance(repo_url, str):
@@ -59,31 +76,51 @@ def _validate(body):
             return f"dimensions.{key} must be a number between 0 and 100"
 
     version = body["version"]
-    if not isinstance(version, str):
-        return "version must be a string"
+    if not isinstance(version, str) or not (1 <= len(version) <= 50):
+        return "version must be a string between 1 and 50 characters"
 
     return None
 
 
+def _load_submissions():
+    """Load submissions from /tmp, seeding from bundled data if needed."""
+    if os.path.exists(DATA_PATH):
+        with open(DATA_PATH, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            return json.loads(content) if content else []
+    # Seed from bundled data on first cold start
+    if os.path.exists(SEED_PATH):
+        with open(SEED_PATH, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+            return json.loads(content) if content else []
+    return []
+
+
+def _save_submissions(entries):
+    """Save submissions to /tmp (ephemeral)."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    data = json.dumps(entries, indent=2, ensure_ascii=False)
+    with open(DATA_PATH, "w", encoding="utf-8") as f:
+        f.write(data)
+        f.flush()
+
+
 class handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Suppress default access log noise in Vercel logs.
         pass
 
     def _send_json(self, status, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # CORS handled by vercel.json — no duplicate headers
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        # CORS handled by vercel.json
         self.end_headers()
 
     def do_POST(self):
@@ -118,40 +155,24 @@ class handler(BaseHTTPRequestHandler):
             "submitted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
-        data_path = os.path.realpath(DATA_PATH)
-
         try:
-            os.makedirs(os.path.dirname(data_path), exist_ok=True)
-            # Open (or create) the file and hold an exclusive lock for read+write.
-            fd = open(data_path, "a+", encoding="utf-8")
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            try:
-                fd.seek(0)
-                content = fd.read().strip()
-                entries = json.loads(content) if content else []
+            entries = _load_submissions()
 
-                # Dedup: update existing entry if repo_url + skill_name match.
-                key_repo = entry["repo_url"]
-                key_skill = entry["skill_name"]
-                updated = False
-                for i, existing in enumerate(entries):
-                    if existing.get("repo_url") == key_repo and existing.get("skill_name") == key_skill:
-                        entries[i] = entry
-                        updated = True
-                        break
-                if not updated:
-                    entries.append(entry)
+            # Dedup: update existing entry if repo_url + skill_name match.
+            key_repo = entry["repo_url"]
+            key_skill = entry["skill_name"]
+            updated = False
+            for i, existing in enumerate(entries):
+                if existing.get("repo_url") == key_repo and existing.get("skill_name") == key_skill:
+                    entries[i] = entry
+                    updated = True
+                    break
+            if not updated:
+                entries.append(entry)
 
-                fd.seek(0)
-                fd.truncate()
-                fd.write(json.dumps(entries, indent=2, ensure_ascii=False))
-                fd.flush()
-                os.fsync(fd.fileno())
-            finally:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-                fd.close()
-        except Exception:
-            traceback.print_exc()
+            _save_submissions(entries)
+        except Exception as exc:
+            print(f"Storage error: {type(exc).__name__}: {exc}", file=sys.stderr)
             self._send_json(500, {"error": "internal storage error"})
             return
 
