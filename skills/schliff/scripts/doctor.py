@@ -14,13 +14,50 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import score_skill as scorer
 import skill_mesh
 
+from scoring.formats import detect_format
 from shared import estimate_token_cost
 from terminal_art import score_to_grade, grade_colored
+
+# Directories to skip during instruction file discovery
+_EXCLUDED_DIRS = {".git", "node_modules", "venv", ".venv", "__pycache__"}
+
+# Filenames to match (lowercase) for instruction file discovery
+_INSTRUCTION_FILENAMES = {"claude.md", ".cursorrules", "agents.md"}
+
+
+def discover_instruction_files(root_dir: str) -> list[dict]:
+    """Discover all project instruction files in a directory tree.
+
+    Finds: CLAUDE.md, .cursorrules, AGENTS.md (any case).
+    Excludes: .git/, node_modules/, venv/, __pycache__/, .venv/
+
+    Uses detect_format() from scoring.formats to classify each file.
+
+    Returns list of dicts:
+    [{"path": "/abs/path/to/CLAUDE.md", "format": "claude.md", "name": "CLAUDE.md"}, ...]
+    """
+    results: list[dict] = []
+    for dirpath, dirs, files in os.walk(root_dir):
+        # Skip excluded directories in-place
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
+        for fname in files:
+            if fname.lower() in _INSTRUCTION_FILENAMES:
+                full_path = os.path.join(dirpath, fname)
+                abs_path = os.path.abspath(full_path)
+                fmt = detect_format(fname)
+                results.append({
+                    "path": abs_path,
+                    "format": fmt,
+                    "name": fname,
+                })
+    results.sort(key=lambda r: r["path"])
+    return results
 
 
 def _default_skill_dirs() -> list[str]:
@@ -91,6 +128,7 @@ def _score_single_skill(skill_path: str) -> dict:
 def run_doctor(
     skill_dirs: list[str] | None = None,
     verbose: bool = False,
+    repo_root: str | None = None,
 ) -> dict:
     """Run doctor scan across all installed skills."""
     dirs = skill_dirs or _default_skill_dirs()
@@ -159,6 +197,10 @@ def run_doctor(
     if mesh_issues:
         summary_parts.append(f"{len(mesh_issues)} mesh issues")
 
+    # Discover project instruction files
+    scan_root = repo_root or "."
+    instruction_files = discover_instruction_files(scan_root)
+
     return {
         "skills_found": len(results),
         "healthy": healthy,
@@ -168,6 +210,7 @@ def run_doctor(
         "mesh_health": mesh_health,
         "mesh_issue_count": len(mesh_issues),
         "results": results,
+        "instruction_files": instruction_files,
         "summary": " | ".join(summary_parts),
     }
 
@@ -222,6 +265,18 @@ def format_doctor_report(report: dict, verbose: bool = False) -> str:
             for issue in r["issues"][:5]:  # Cap at 5 to avoid flooding
                 lines.append(f"    {'':25s}  └─ {issue}")
 
+    lines.append("")
+
+    # Project instruction files
+    instruction_files = report.get("instruction_files", [])
+    lines.append("  Project Instruction Files")
+    lines.append("  " + "-" * 25)
+    if instruction_files:
+        for f in instruction_files:
+            rel_path = os.path.relpath(f["path"])
+            lines.append(f"  {f['name']:<20s} {f['format']:<14s} ./{rel_path}")
+    else:
+        lines.append("  No project instruction files found.")
     lines.append("")
 
     # Mesh health
